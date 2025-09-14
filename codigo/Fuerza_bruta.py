@@ -21,6 +21,7 @@ class Fuerza_bruta:
         solucion = []
         for combinacion in combinaciones:
             valores = dict(zip(variables, combinacion))  # Asignar valores a las variables
+            # 
             # print(valores)
             if all(self.evaluar_condicion(termino, valores) for termino in terminos):
                 solucion.append(valores)

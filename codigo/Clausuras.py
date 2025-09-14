@@ -5,7 +5,7 @@ class Clausuras:
             lineas = f.readlines()
         return [linea.strip().split() for linea in lineas]
     
-    def cargar_terminos(self)
+    # def cargar_terminos(self)
         
 
         

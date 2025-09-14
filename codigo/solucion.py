@@ -1,6 +1,11 @@
 import os
-from Fuerza_bruta import Fuerza_bruta
-from Generador import Generador
+import sys
+
+# Agrega el directorio raíz del proyecto al sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from codigo.Generador import Generador
+from codigo.Fuerza_bruta import Fuerza_bruta
 
 # Función para leer el archivo y extraer las condiciones
 def leer_terminos(archivo):
@@ -9,11 +14,11 @@ def leer_terminos(archivo):
     return [linea.strip().split() for linea in lineas]
 
 def main():
-    n_ficheros = 5
     generador1 = Generador()
+    n_ficheros = 20
     generador1.generar_ficheros(n_ficheros)
     # Carpeta donde están los ficheros
-    carpeta_problemas = os.path.join(os.path.dirname(__file__), "problemas")
+    carpeta_problemas = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "problemas"))
     todos_los_terminos=[]
     
     for i in range(1, n_ficheros+1):
@@ -36,6 +41,8 @@ def main():
         else:
             print("No se encontraron soluciones que satisfagan todas las condiciones.")
 
+    # Eliminar los archivos generados
+    generador1.eliminar_archivos_problemas()
     
 
 if __name__ == "__main__":

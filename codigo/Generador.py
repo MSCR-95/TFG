@@ -31,3 +31,16 @@ class Generador:
                     clausula_str = [str(num) for num in clausula]
                     clausula_str.append('0')
                     f.write(' '.join(clausula_str) + '\n')
+    
+    def eliminar_archivos_problemas(self):
+        # Ruta a la carpeta 'problemas'
+        carpeta_problemas = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "problemas"))
+
+        # Recorremos todos los archivos de la carpeta
+        for nombre_archivo in os.listdir(carpeta_problemas):
+            ruta_archivo = os.path.join(carpeta_problemas, nombre_archivo)
+
+            # Verificamos que sea un archivo antes de eliminarlo
+            if os.path.isfile(ruta_archivo):
+                os.remove(ruta_archivo)
+                # print(f"Archivo eliminado: {nombre_archivo}")
