@@ -15,6 +15,8 @@ def leer_terminos(archivo):
 
 def main():
     generador1 = Generador()
+    # Eliminar los archivos generados previamente
+    generador1.eliminar_archivos_problemas()
     n_ficheros = 20
     generador1.generar_ficheros(n_ficheros)
     # Carpeta donde están los ficheros
@@ -40,10 +42,6 @@ def main():
              print([soluciones[i][0][j] for j in range(1, 6)]) # para mostrar la solucion
         else:
             print("No se encontraron soluciones que satisfagan todas las condiciones.")
-
-    # Eliminar los archivos generados
-    generador1.eliminar_archivos_problemas()
-    
 
 if __name__ == "__main__":
     main()
