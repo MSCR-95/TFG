@@ -1,6 +1,35 @@
 from itertools import product 
-class Fuerza_bruta:
- 
+
+from pathlib import Path
+from typing import Any, Dict
+
+# Importa la interfaz del framework
+from codigo.Framework import Algorithm, register_algorithm
+
+@register_algorithm("fuerza_bruta") 
+class Fuerza_bruta(Algorithm): 
+    def run(self, file_path: Path) -> Dict[str, Any]:
+        """Método requerido por el framework: lee el fichero y resuelve."""
+        terminos = self.leer_terminos(file_path)
+        solucion = self.resolver(terminos)
+
+        if solucion:
+            return {
+                "satisfacible": True,
+                "solucion": solucion[0],  # dict {1: 0, 2: 1, ...}
+            }
+        else:
+            return {
+                "satisfacible": False,
+                "solucion": None,
+            }
+            
+    
+    def leer_terminos(self, file_path: Path):
+        with file_path.open("r") as f:
+            lineas = f.readlines()
+        return [linea.strip().split() for linea in lineas]
+    
     # Función para evaluar un termino FUERZABRUTA
     def evaluar_condicion(self, termino, valores):
         for literal in termino:

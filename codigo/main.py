@@ -1,47 +1,26 @@
 import os
-import sys
+import sys 
 
 # Agrega el directorio raíz del proyecto al sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+from pathlib import Path
+from codigo.Framework import Runner, JSONLResultSink, build_algorithms
+from codigo.Fuerza_bruta import Fuerza_bruta  # necesario para registrar el algoritmo
 from codigo.Generador import Generador
-from codigo.Fuerza_bruta import Fuerza_bruta
 
-# Función para leer el archivo y extraer las condiciones
-def leer_terminos(archivo):
-    with open(archivo, 'r') as f:
-        lineas = f.readlines()
-    return [linea.strip().split() for linea in lineas]
 
 def main():
-    generador1 = Generador()
-    # Eliminar los archivos generados previamente
-    generador1.eliminar_archivos_problemas()
-    n_ficheros = 20
-    generador1.generar_ficheros(n_ficheros)
-    # Carpeta donde están los ficheros
-    carpeta_problemas = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "problemas"))
-    todos_los_terminos=[]
-    
-    for i in range(1, n_ficheros+1):
-        nombre_fichero = f"PROBLEM_003_005_{i}.txt"
-        ruta_fichero = os.path.join(carpeta_problemas, nombre_fichero)
-        
-        terminos = leer_terminos(ruta_fichero)
-        todos_los_terminos.append(terminos)
+    generador = Generador() # Crear instancia del generador
+    generador.eliminar_archivos_problemas() # Eliminar archivos anteriores
+    generador.generar_ficheros(20) 
 
+    carpeta = Path("problemas") # Carpeta donde se encuentran los archivos de problemas
+    algorithms = build_algorithms(["fuerza_bruta"]) # Construir el diccionario de algoritmos disponibles, nos permite agregar más algoritmos sin cambiar esta parte del código, solo importarlos y registrarlos en su módulo correspondiente
+    runner = Runner(algorithms, n_jobs=1) # Crear el runner con los algoritmos disponibles y n_jobs=1 para ejecución secuencial
+    results = runner.run_directory(carpeta, pattern="*.txt") # Ejecutar los algoritmos en todos los archivos de la carpeta "problemas" que terminen con .txt
 
-    soluciones = []
-    fuerzaBruta = Fuerza_bruta()
-
-    for i in range(0, n_ficheros):
-        soluciones.append(fuerzaBruta.resolver(todos_los_terminos[i]))
-        print("Solucion de fichero PROBLEM_003_005_",i+1,".txt")
-        if soluciones:
-            #print(soluciones)
-             print([soluciones[i][0][j] for j in range(1, 6)]) # para mostrar la solucion
-        else:
-            print("No se encontraron soluciones que satisfagan todas las condiciones.")
+    sink = JSONLResultSink(Path("resultados.jsonl")) # Crear un sink para guardar los resultados en un archivo JSONL
+    sink.write_all(results) # Guardar los resultados en el archivo JSONL
 
 if __name__ == "__main__":
     main()
