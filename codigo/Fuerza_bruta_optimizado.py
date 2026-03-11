@@ -8,12 +8,19 @@ from typing import Any, Dict, List, Optional, Tuple
 from codigo.Framework import Algorithm, register_algorithm
 
 
-@register_algorithm("fuerza_bruta")
-class Fuerza_bruta(Algorithm):
+@register_algorithm("fuerza_bruta_optimizado")
+class Fuerza_bruta_optimizado(Algorithm):
+    """Algoritmo de fuerza bruta optimizado para resolver problemas Max-SAT.
+
+    Optimizaciones respecto a Fuerza_bruta:
+    - Caché de combinaciones compartida entre instancias (thread-safe)
+    - Para en cuanto encuentra una solución que satisface TODAS las cláusulas,
+      sin seguir buscando combinaciones que no pueden mejorar el resultado
+    """
 
     # Compartida entre TODAS las instancias y workers
     _cache_combinaciones: Dict[int, List[Tuple]] = {}
-    _lock = threading.Lock()    # para la concurrencia en el acceso a la caché
+    _lock = threading.Lock()
 
     def run(self, file_path: Path) -> Dict[str, Any]:
         """Método requerido por el framework: lee el fichero y resuelve."""
@@ -83,7 +90,10 @@ class Fuerza_bruta(Algorithm):
     def resolver(
         self, terminos: List[List[str]], n_variables: int
     ) -> Tuple[Optional[Dict[int, int]], int]:
-        """Encuentra la asignación que satisface el mayor número de cláusulas.
+        """Encuentra la primera asignación que satisface TODAS las cláusulas.
+
+        A diferencia de Fuerza_bruta, no sigue buscando una vez encontrada
+        la solución óptima (todas las cláusulas satisfechas).
 
         Devuelve:
             - La mejor asignación encontrada
@@ -104,7 +114,7 @@ class Fuerza_bruta(Algorithm):
                 mejor_count = count
                 mejor_solucion = valores
 
-                # Si satisface todas, no hace falta seguir buscando
+                # OPTIMIZACIÓN: si satisface todas, para inmediatamente
                 if mejor_count == n_clausulas:
                     break
 
