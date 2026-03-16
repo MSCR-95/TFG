@@ -15,7 +15,7 @@ Preparado para el futuro:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 
 from Framework import ResultRecord, ResultSink
@@ -28,14 +28,14 @@ class Analizador(ResultSink):
     junto a JSONLResultSink o CSVResultSink.
 
     Ejemplo de uso:
-        analizador = Analizador()
+        analizador = Analizador(n_jobs=2)
         sink = MultiSink(JSONLResultSink(Path("resultados.jsonl")), analizador)
         sink.write_all(results)
         analizador.imprimir_resumen()
     """
 
-    def __init__(self):
-        # Almacena todos los registros procesados
+    def __init__(self, n_jobs: int = 1):
+        self.n_jobs = n_jobs
         self._records: List[ResultRecord] = []
 
     def write_all(self, records) -> None:
@@ -47,12 +47,7 @@ class Analizador(ResultSink):
     # ------------------------------------------------------------------
 
     def tiempo_total(self, algoritmo: Optional[str] = None) -> float:
-        """Tiempo total de ejecución en segundos.
-
-        Args:
-            algoritmo: Si se especifica, filtra solo ese algoritmo.
-                       Si es None, suma todos los algoritmos.
-        """
+        """Tiempo total de ejecución en segundos."""
         registros = self._filtrar_por_algoritmo(algoritmo)
         return round(sum(r.duration_s for r in registros), 6)
 
@@ -74,22 +69,20 @@ class Analizador(ResultSink):
     # Estadísticas por complejidad (preparado para gráficas)
     # ------------------------------------------------------------------
 
-    def tiempo_por_n_clausulas(self, algoritmo: Optional[str] = None) -> Dict[int, float]:
-        """Devuelve el tiempo medio agrupado por número de cláusulas.
-
-        Útil para graficar cómo crece el tiempo al aumentar la complejidad.
-        Extrae n_clausulas del nombre del fichero: PROBLEM_{nClausulas:03}_...
-        """
+    def tiempo_por_dimensiones(
+        self, algoritmo: Optional[str] = None
+    ) -> Dict[Tuple[int, int], float]:
+        """Devuelve el tiempo medio agrupado por (n_clausulas, n_variables)."""
         registros = self._filtrar_por_algoritmo(algoritmo)
 
-        tiempos_por_grupo: Dict[int, List[float]] = defaultdict(list)
+        tiempos_por_grupo: Dict[Tuple[int, int], List[float]] = defaultdict(list)
         for r in registros:
-            n_clausulas = self._extraer_n_clausulas(r.file)
-            tiempos_por_grupo[n_clausulas].append(r.duration_s)
+            clave = self._extraer_dimensiones(r.file)
+            tiempos_por_grupo[clave].append(r.duration_s)
 
         return {
-            n: round(sum(ts) / len(ts), 6)
-            for n, ts in sorted(tiempos_por_grupo.items())
+            clave: round(sum(ts) / len(ts), 6)
+            for clave, ts in sorted(tiempos_por_grupo.items())
         }
 
     # ------------------------------------------------------------------
@@ -102,9 +95,10 @@ class Analizador(ResultSink):
             print("No hay resultados que analizar.")
             return
 
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 55)
         print("RESUMEN DE EJECUCIÓN")
-        print("=" * 50)
+        print(f"Workers (n_jobs): {self.n_jobs}")
+        print("=" * 55)
 
         tiempos = self.tiempo_por_algoritmo()
         for algoritmo, tiempo in tiempos.items():
@@ -114,13 +108,16 @@ class Analizador(ResultSink):
             print(f"  Tiempo total        : {tiempo:.6f} s")
             print(f"  Tiempo medio        : {self.tiempo_medio(algoritmo):.6f} s")
 
-            tiempos_complejidad = self.tiempo_por_n_clausulas(algoritmo)
-            if tiempos_complejidad:
-                print("  Tiempo medio por nº de cláusulas:")
-                for n_clausulas, t_medio in tiempos_complejidad.items():
-                    print(f"    {n_clausulas:>4} cláusulas → {t_medio:.6f} s")
+            tiempos_dimensiones = self.tiempo_por_dimensiones(algoritmo)
+            if tiempos_dimensiones:
+                print(f"\n  {'Cláusulas':>10}  {'Variables':>10}  {'Tiempo medio':>14}")
+                print(f"  {'-'*10}  {'-'*10}  {'-'*14}")
+                for (n_clausulas, n_variables), t_medio in tiempos_dimensiones.items():
+                    print(
+                        f"  {n_clausulas:>10}  {n_variables:>10}  {t_medio:>12.6f} s"
+                    )
 
-        print("=" * 50 + "\n")
+        print("\n" + "=" * 55 + "\n")
 
     # ------------------------------------------------------------------
     # Métodos auxiliares privados
@@ -132,11 +129,12 @@ class Analizador(ResultSink):
             return self._records
         return [r for r in self._records if r.algorithm == algoritmo]
 
-    def _extraer_n_clausulas(self, file_path: str) -> int:
-        """Extrae n_clausulas del nombre del fichero.
+    def _extraer_dimensiones(self, file_path: str) -> Tuple[int, int]:
+        """Extrae (n_clausulas, n_variables) del nombre del fichero.
 
         El nombre sigue el patrón: PROBLEM_{nClausulas:03}_{nVariables:03}_{i}.txt
+        Ejemplo: PROBLEM_005_010_1.txt → (5, 10)
         """
-        nombre = Path(file_path).stem          # 'PROBLEM_005_005_1'
-        partes = nombre.split("_")             # ['PROBLEM', '005', '005', '1']
-        return int(partes[1])
+        nombre = Path(file_path).stem       # 'PROBLEM_005_010_1'
+        partes = nombre.split("_")          # ['PROBLEM', '005', '010', '1']
+        return int(partes[1]), int(partes[2])

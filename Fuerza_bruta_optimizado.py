@@ -7,15 +7,19 @@ from typing import Any, Dict, List, Optional, Tuple
 # Importa la interfaz del framework
 from Framework import Algorithm, register_algorithm
 
+MAX_VARIABLES_CACHE = 20  # 2²⁰ = ~1M combinaciones, seguro en memoria
+
 
 @register_algorithm("fuerza_bruta_optimizado")
 class Fuerza_bruta_optimizado(Algorithm):
     """Algoritmo de fuerza bruta optimizado para resolver problemas Max-SAT.
 
-    Optimizaciones respecto a Fuerza_bruta:
-    - Caché de combinaciones compartida entre instancias (thread-safe)
-    - Para en cuanto encuentra una solución que satisface TODAS las cláusulas,
-      sin seguir buscando combinaciones que no pueden mejorar el resultado
+    Optimización respecto a Fuerza_bruta: para en cuanto encuentra una
+    asignación que satisface TODAS las cláusulas, sin seguir explorando
+    combinaciones que no pueden mejorar el resultado.
+
+    En problemas satisfacibles es más rápido. En problemas no satisfacibles
+    el comportamiento es idéntico a Fuerza_bruta ya que debe recorrer todo.
     """
 
     # Compartida entre TODAS las instancias y workers
@@ -39,18 +43,19 @@ class Fuerza_bruta_optimizado(Algorithm):
             "n_clausulas": n_clausulas,
         }
 
-    def _get_combinaciones(self, n_variables: int) -> List[Tuple]:
-        """Devuelve las combinaciones para n_variables, generándolas solo la primera vez."""
-        if n_variables in self._cache_combinaciones:
+    def _get_combinaciones(self, n_variables: int):
+        """Usa caché para n_variables <= MAX_VARIABLES_CACHE, generador lazy para los grandes."""
+        if n_variables <= MAX_VARIABLES_CACHE:
+            if n_variables in self._cache_combinaciones:
+                return self._cache_combinaciones[n_variables]
+            with self._lock:
+                if n_variables not in self._cache_combinaciones:
+                    self._cache_combinaciones[n_variables] = list(
+                        product([0, 1], repeat=n_variables)
+                    )
             return self._cache_combinaciones[n_variables]
-
-        with self._lock:
-            # Double-checked locking: comprueba de nuevo dentro del lock
-            if n_variables not in self._cache_combinaciones:
-                self._cache_combinaciones[n_variables] = list(
-                    product([0, 1], repeat=n_variables)
-                )
-        return self._cache_combinaciones[n_variables]
+        else:
+            return product([0, 1], repeat=n_variables)
 
     def extraer_n_variables(self, file_path: Path) -> int:
         """Extrae el número de variables del nombre del fichero.
@@ -76,7 +81,7 @@ class Fuerza_bruta_optimizado(Algorithm):
             if (literal.startswith("-") and valor == 0) or (
                 not literal.startswith("-") and valor == 1
             ):
-                return True  # Basta con que un literal sea True (OR)
+                return True
         return False
 
     def contar_clausulas_satisfechas(
@@ -92,12 +97,9 @@ class Fuerza_bruta_optimizado(Algorithm):
     ) -> Tuple[Optional[Dict[int, int]], int]:
         """Encuentra la primera asignación que satisface TODAS las cláusulas.
 
-        A diferencia de Fuerza_bruta, no sigue buscando una vez encontrada
-        la solución óptima (todas las cláusulas satisfechas).
-
-        Devuelve:
-            - La mejor asignación encontrada
-            - El número de cláusulas que satisface
+        OPTIMIZACIÓN: para inmediatamente al encontrar solución completa.
+        En problemas no satisfacibles recorre todas las combinaciones igual
+        que Fuerza_bruta para encontrar la asignación que satisface más.
         """
         variables = list(range(1, n_variables + 1))
         combinaciones = self._get_combinaciones(n_variables)
@@ -114,7 +116,7 @@ class Fuerza_bruta_optimizado(Algorithm):
                 mejor_count = count
                 mejor_solucion = valores
 
-                # OPTIMIZACIÓN: si satisface todas, para inmediatamente
+                # OPTIMIZACIÓN: para en cuanto satisface todas las cláusulas
                 if mejor_count == n_clausulas:
                     break
 

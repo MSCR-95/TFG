@@ -29,6 +29,7 @@ import datetime as dt
 import hashlib
 import json
 import logging
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,7 @@ from joblib import Parallel, delayed
 # ---------------------------------------------------------------------------
 # Modelo de resultado
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ResultRecord:
@@ -53,6 +55,7 @@ class ResultRecord:
         d = dataclasses.asdict(self)
         return d
 
+
 # ---------------------------------------------------------------------------
 # Interfaz de algoritmo (Strategy) + Registro (Factory)
 # ---------------------------------------------------------------------------
@@ -62,6 +65,7 @@ _ALGO_REGISTRY: Dict[str, type["Algorithm"]] = {}
 
 def register_algorithm(name: str):
     """Decorator para registrar algoritmos por nombre."""
+
     def _wrap(cls: type["Algorithm"]):
         key = name.strip().lower()
         if key in _ALGO_REGISTRY:
@@ -69,6 +73,7 @@ def register_algorithm(name: str):
         _ALGO_REGISTRY[key] = cls
         cls.__algo_name__ = key  # type: ignore[attr-defined]
         return cls
+
     return _wrap
 
 
@@ -79,7 +84,9 @@ def build_algorithms(names: Sequence[str]) -> List["Algorithm"]:
         try:
             algos.append(_ALGO_REGISTRY[key]())
         except KeyError:
-            raise KeyError(f"Algoritmo desconocido: '{n}'. Registrados: {list(_ALGO_REGISTRY)}")
+            raise KeyError(
+                f"Algoritmo desconocido: '{n}'. Registrados: {list(_ALGO_REGISTRY)}"
+            )
     return algos
 
 
@@ -103,9 +110,11 @@ class Algorithm(ABC):
     def after_run(self, file_path: Path, result: Dict[str, Any]) -> None:
         """Hook opcional después de ejecutar."""
 
+
 # ---------------------------------------------------------------------------
 # Sinks de resultados (Strategy)
 # ---------------------------------------------------------------------------
+
 
 class ResultSink(ABC):
     @abstractmethod
@@ -162,9 +171,11 @@ class MultiSink(ResultSink):
         for s in self.sinks:
             s.write_all(data)
 
+
 # ---------------------------------------------------------------------------
 # Ejecutores
 # ---------------------------------------------------------------------------
+
 
 class DirectoryJob:
     """Empaqueta una combinación (algoritmo, fichero) para ejecución."""
@@ -183,10 +194,15 @@ class Runner:
         algorithms: Sequence[Algorithm],
         n_jobs: int = 1,
         backend: Optional[str] = None,
+        verbose: bool = False,
     ) -> None:
         self.algorithms = list(algorithms)
         self.n_jobs = n_jobs
         self.backend = backend
+        self.verbose = verbose
+        self._total_jobs: int = 0
+        self._completed_jobs: int = 0
+        self._lock = threading.Lock()  # protege el contador en ejecución paralela
 
     def _run_one(self, job: DirectoryJob) -> ResultRecord:
         file_path = job.file_path
@@ -203,7 +219,8 @@ class Runner:
             result = {"error": str(e)}
         t1 = dt.datetime.now().timestamp()
         end = dt.datetime.now(dt.timezone.utc)
-        return ResultRecord(
+
+        record = ResultRecord(
             file=str(file_path),
             algorithm=algo.name,
             duration_s=round(t1 - t0, 6),
@@ -212,26 +229,49 @@ class Runner:
             result=result,
         )
 
-    def run_directory(self, directory: Path, pattern: str = "*", recursive: bool = False) -> List[ResultRecord]:
+        if self.verbose:
+            with self._lock:  # solo un worker a la vez actualiza el contador
+                self._completed_jobs += 1
+                print(
+                    f"  [{self._completed_jobs}/{self._total_jobs}]"
+                    f"  {algo.name} → {file_path.name}"
+                )
+
+        return record
+
+    def run_directory(
+        self, directory: Path, pattern: str = "*", recursive: bool = False
+    ) -> List[ResultRecord]:
         files = sorted(directory.rglob(pattern) if recursive else directory.glob(pattern))
         jobs = [DirectoryJob(f, algo) for f in files for algo in self.algorithms]
         if not jobs:
             logging.warning("No hay trabajos que ejecutar (revisa --dir y --pattern)")
             return []
+
+        self._total_jobs = len(jobs)
+        self._completed_jobs = 0
+
+        if self.verbose:
+            print(f"\nIniciando ejecución: {self._total_jobs} trabajos\n")
+
         logging.info("Ejecutando %d trabajos con n_jobs=%s", len(jobs), self.n_jobs)
-        
-        results: List[ResultRecord] = cast(List[ResultRecord],Parallel(n_jobs=self.n_jobs, backend=self.backend)(
-        delayed(self._run_one)(job) for job in jobs
+        results: List[ResultRecord] = cast(
+            List[ResultRecord],
+            Parallel(n_jobs=self.n_jobs, backend=self.backend)(
+                delayed(self._run_one)(job) for job in jobs
+            ),
         )
-    )
+
+        if self.verbose:
+            print(f"\nEjecución completada: {self._completed_jobs}/{self._total_jobs}\n")
+
         return results
-    
-    
 
 
 # ---------------------------------------------------------------------------
 # Algoritmos de ejemplo
 # ---------------------------------------------------------------------------
+
 
 @register_algorithm("word_count")
 class WordCountAlgorithm(Algorithm):
@@ -254,9 +294,11 @@ class SHA256Algorithm(Algorithm):
                 h.update(chunk)
         return {"sha256": h.hexdigest()}
 
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def build_sink(kind: str, out_path: Path) -> ResultSink:
     k = kind.lower()
@@ -269,34 +311,60 @@ def build_sink(kind: str, out_path: Path) -> ResultSink:
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Framework para ejecutar algoritmos sobre ficheros con joblib")
+    p = argparse.ArgumentParser(
+        description="Framework para ejecutar algoritmos sobre ficheros con joblib"
+    )
     p.add_argument("--dir", required=True, type=Path, help="Directorio de entrada")
     p.add_argument("--pattern", default="*", help="Glob de ficheros, p.ej. *.txt")
     p.add_argument("--recursive", action="store_true", help="Buscar recursivamente")
-    p.add_argument("--algos", nargs="+", required=True, help="Nombres de algoritmos a ejecutar")
-    p.add_argument("--n-jobs", type=int, default=1, help="Número de workers para joblib (usa -1 para todos)")
-    p.add_argument("--backend", default=None, help="Backend de joblib (loky, threading, multiprocessing)")
-    p.add_argument("--out", default="jsonl", choices=["jsonl", "csv"], help="Formato de salida")
-    p.add_argument("--out-path", type=Path, default=Path("results.jsonl"), help="Ruta del fichero de salida")
-    p.add_argument("--log-level", default="INFO", help="Nivel de log (DEBUG, INFO, WARNING, ...)")
+    p.add_argument(
+        "--algos", nargs="+", required=True, help="Nombres de algoritmos a ejecutar"
+    )
+    p.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="Número de workers para joblib (usa -1 para todos)",
+    )
+    p.add_argument(
+        "--backend",
+        default=None,
+        help="Backend de joblib (loky, threading, multiprocessing)",
+    )
+    p.add_argument(
+        "--out",
+        default="jsonl",
+        choices=["jsonl", "csv"],
+        help="Formato de salida",
+    )
+    p.add_argument(
+        "--out-path",
+        type=Path,
+        default=Path("results.jsonl"),
+        help="Ruta del fichero de salida",
+    )
+    p.add_argument(
+        "--log-level", default="INFO", help="Nivel de log (DEBUG, INFO, WARNING, ...)"
+    )
     return p.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
-    logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO), format="%(levelname)s %(message)s")
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(levelname)s %(message)s",
+    )
 
     if not args.dir.exists() or not args.dir.is_dir():
         logging.error("--dir no existe o no es un directorio: %s", args.dir)
         return 2
 
-    # Construimos algoritmos desde el registro
     algorithms = build_algorithms(args.algos)
 
     runner = Runner(algorithms, n_jobs=args.n_jobs, backend=args.backend)
     results = runner.run_directory(args.dir, pattern=args.pattern, recursive=args.recursive)
 
-    # Persistimos
     sink = build_sink(args.out, args.out_path)
     sink.write_all(results)
 
