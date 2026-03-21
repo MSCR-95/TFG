@@ -101,7 +101,7 @@ class Fuerza_bruta_optimizado(Algorithm):
         En problemas no satisfacibles recorre todas las combinaciones igual
         que Fuerza_bruta para encontrar la asignación que satisface más.
         """
-        variables = list(range(1, n_variables + 1))
+        variables = list(range(1, n_variables + 1)) 
         combinaciones = self._get_combinaciones(n_variables)
 
         mejor_solucion: Optional[Dict[int, int]] = None
