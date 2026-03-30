@@ -1,0 +1,2 @@
+Version: 1.11.1
+Arguments: ['C:\\Users\\circleci\\AppData\\Local\\Temp\\cibw-run-x7baoi2_\\cp313-win_amd64\\build\\venv\\Scripts\\delvewheel', 'repair', '-w', 'C:\\Users\\circleci\\AppData\\Local\\Temp\\cibw-run-x7baoi2_\\cp313-win_amd64\\repaired_wheel', 'C:\\Users\\circleci\\AppData\\Local\\Temp\\cibw-run-x7baoi2_\\cp313-win_amd64\\built_wheel\\dimod-0.12.21-cp313-cp313-win_amd64.whl']

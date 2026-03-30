@@ -1,0 +1,2146 @@
+# Copyright 2024 D-Wave Inc.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+from __future__ import annotations
+
+import collections
+import functools
+import numbers
+import typing
+
+import numpy as np
+import numpy.typing
+
+from dwave.optimization._model import _broadcast_shapes, ArraySymbol, Symbol
+from dwave.optimization.model import Model
+from dwave.optimization.symbols import (
+    Add,
+    And,
+    ARange,
+    ArgSort,
+    BroadcastTo,
+    BSpline,
+    Concatenate,
+    Cos,
+    Divide,
+    Equal,
+    Exp,
+    Expit,
+    Extract,
+    IsIn,
+    LessEqual,
+    LinearProgram,
+    LinearProgramFeasible,
+    LinearProgramObjectiveValue,
+    LinearProgramSolution,
+    Log,
+    Logical,
+    MatrixMultiply,
+    Maximum,
+    Mean,
+    Minimum,
+    Modulus,
+    Multiply,
+    NaryAdd,
+    NaryMaximum,
+    NaryMinimum,
+    NaryMultiply,
+    Not,
+    Or,
+    Put,
+    Resize,
+    Rint,
+    Roll,
+    SafeDivide,
+    Sin,
+    SoftMax,
+    SquareRoot,
+    Subtract,
+    Tanh,
+    Transpose,
+    Where,
+    Xor,
+)
+from dwave.optimization.typing import ArraySymbolLike
+
+
+__all__ = [
+    "absolute",
+    "add",
+    "arange",
+    "as_array_symbols",
+    "atleast_1d",
+    "atleast_2d",
+    "broadcast_shapes",
+    "broadcast_symbols",
+    "broadcast_to",
+    "bspline",
+    "concatenate",
+    "cos",
+    "divide",
+    "exp",
+    "expit",
+    "extract",
+    "hstack",
+    "isin",
+    "linprog",
+    "log",
+    "logical",
+    "logical_and",
+    "logical_not",
+    "logical_or",
+    "logical_xor",
+    "matmul",
+    "maximum",
+    "mean",
+    "minimum",
+    "mod",
+    "multiply",
+    "put",
+    "resize",
+    "rint",
+    "roll",
+    "safe_divide",
+    "sin",
+    "softmax",
+    "sqrt",
+    "stack",
+    "tanh",
+    "transpose",
+    "vstack",
+    "where",
+]
+
+
+def _binaryop(
+    binaryop: type,
+    naryop: type | None = None,
+):
+    def decorator(f):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            # First let's make sure we have the correct number of arguments for our function
+            if len(args) < 2:
+                raise TypeError(f"{f.__name__}() missing 2 required positional arguments")
+            if len(args) > 2 and naryop is None:
+                # If we don't have a nary variation then we don't support more than two arguments
+                raise TypeError(
+                    f"{f.__name__}() takes 2 positional arguments but {len(args)} were given"
+                )
+
+            # For simplicity, let's convert all of the array-likes into np.ndarray.
+            # We don't yet go all of the way to ArraySymbol because we'd like to avoid
+            # this function having side effects (i.e., adding a new symbol to the model)
+            # We also force float64 because that's the underlying type we use, but if we
+            # eventually support multiple dtypes we'll want to be more general.
+            arrays: tuple[np.typing.NDArray | ArraySymbol] = tuple(
+                arg if isinstance(arg, ArraySymbol) else np.asarray(arg, dtype=np.float64) for arg in args
+            )
+
+            # Now get the shape we'd be broadcasting to
+            shape = broadcast_shapes(
+                *(arr.shape() if isinstance(arr, ArraySymbol) else arr.shape for arr in arrays),
+            )
+
+            # Ok, no errors so far so our shapes are compatible. Now we need to
+            # actually convert them into array symbols
+            array_symbols = as_array_symbols(*arrays)
+
+            # And finally reshape them for broadcasting. BinaryOp specifically
+            # supports broadcasting length 1 arrays, so we can avoid some
+            # reshapes in that case
+            if len(args) == 2:
+                reshaped = tuple(
+                    broadcast_to(sym, shape) if np.prod(sym.shape()) != 1 else sym
+                    for sym in array_symbols
+                )
+                return binaryop(*reshaped, **kwargs)
+
+            # For NaryOp though we need to do full broadcasting.
+            # If naryop is None we shouldn't have been able to get here.
+            return naryop(*broadcast_symbols(*array_symbols), **kwargs)
+
+        return wrapper
+    return decorator
+
+
+absolute = abs
+"""Absolute value element-wise on a symbol.
+
+An alias for :func:`abs`.
+
+Examples:
+    This example adds the absolute value of an integer decision
+    variable to a model.
+
+    >>> from dwave.optimization.model import Model
+    >>> model = Model()
+    >>> x = abs(model.constant([-2, 0, 1]))
+    >>> model.states.resize(1)
+    >>> with model.lock():
+    ...     print(x.state())
+    [2. 0. 1.]
+
+See Also:
+    :class:`~dwave.optimization.symbols.Absolute`: equivalent symbol.
+
+.. versionadded:: 0.6.2
+"""
+
+
+@_binaryop(binaryop=Add, naryop=NaryAdd)
+def add(x1: ArraySymbolLike, x2: ArraySymbolLike, *xi: ArraySymbolLike) -> Add | NaryAdd:
+    r"""Return an element-wise addition on the given symbols.
+
+    In the underlying directed acyclic expression graph, produces an ``Add``
+    node if two array nodes are provided and a ``NaryAdd`` node otherwise.
+
+    Args:
+        x1, x2: Input array symbol to be added.
+        *xi: Additional input array symbols to be added.
+
+    Returns:
+        A symbol that sums the given symbols element-wise.
+        Adding two symbols returns a :class:`~dwave.optimization.symbols.Add`.
+        Adding three or more symbols returns a
+        :class:`~dwave.optimization.symbols.NaryAdd`.
+
+    Examples:
+        This example adds two integer symbols of size :math:`1 \times 2`.
+        Equivalently, you can use the ``+`` operator (e.g., :code:`i + j`).
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import add
+        ...
+        >>> model = Model()
+        >>> i = model.integer(2)
+        >>> j = model.integer(2)
+        >>> i_plus_j = add(i, j)    # alternatively: i_plus_j = i + j
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [3, 5])
+        ...     j.set_state(0, [7, 5])
+        ...     print(i_plus_j.state(0))
+        [10. 10.]
+
+    See Also:
+        :class:`~dwave.optimization.Add`
+
+        :class:`~dwave.optimization.NaryAdd`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def arange(start: typing.Union[int, ArraySymbol, None] = None,
+           stop: typing.Union[int, ArraySymbol, None] = None,
+           step: typing.Union[int, ArraySymbol, None] = None,
+           ) -> ArraySymbol:
+    """Return an array symbol with evenly spaced values within a given interval.
+
+    Args:
+        start: Start of the interval. Unless only one argument is provided in
+            which it is interpreted as the ``stop``.
+        stop: End of the interval.
+        step: Spacing between values.
+
+    See Also:
+        :class:`~dwave.optimization.ARange`: equivalent symbol.
+
+    .. versionadded:: 0.5.2
+    """
+
+    if stop is None and step is None:
+        # then start is actually stop
+        start, stop = None, start
+
+    if start is None:
+        start = 0
+    if stop is None:
+        raise ValueError("stop cannot be None")
+    if step is None:
+        step = 1
+
+    return ARange(start, stop, step)
+
+
+def argsort(array: ArraySymbol) -> ArgSort:
+    """Return an ordering of the indices that would sort (flattened) values
+    of the given symbol. Note that while it will return an array with
+    identical shape to the given symbol, the returned indices will always be
+    indices on flattened array, similar to ``numpy.argsort(a, axis=None)``.
+
+    Always performs a index-wise stable sort such that the relative order of
+    values is maintained in the returned order.
+
+    Args:
+        array: Input array to perform the argsort on.
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import argsort
+        ...
+        >>> model = Model()
+        >>> a = model.constant([5, 2, 7, 4, 9, 1])
+        >>> indices = argsort(a)
+        >>> indices.shape()
+        (5,)
+        >>> with model.lock():
+        ...    model.states.resize(1)
+        ...    print(indices.state())
+        [5. 1. 3. 0. 2. 4.]
+        >>> a = model.constant([[5, 2, 7], [4, 9, 1]])
+        >>> indices = argsort(a)
+        >>> indices.shape()
+        (5,)
+        >>> with model.lock():
+        ...    model.states.resize(1)
+        ...    print(indices.state())
+        [[5. 1. 3.]
+         [0. 2. 4.]]
+
+    See Also:
+        :class:`~dwave.optimization.ArgSort`: equivalent symbol.
+
+    .. versionadded:: 0.6.4
+    """
+    return ArgSort(array)
+
+
+def as_array_symbols(
+    *arrays: ArraySymbolLike,
+    model: Model | None = None,
+) -> tuple[ArraySymbol, ...]:
+    """Convert the given inputs into ``ArraySymbol``.
+
+    Args:
+        *arrays:
+            Either :class:`dwave.optimization.model.ArraySymbol` or array-like objects.
+        model:
+            If provided, defines the model that holds the returned ArraySymbols.
+            If not provided, the model is inferred from the given inputs.
+
+    Returns:
+        A tuple of :class:`dwave.optimization.model.ArraySymbol`.
+
+    .. versionadded:: 0.6.11
+    """
+    # Find the model, if one wasn't provided
+    if model is None:
+        for array in arrays:
+            if isinstance(array, Symbol):
+                model = array.model
+                break
+        else:
+            raise TypeError("given arrays must contain at least one ArraySymbol")
+
+    # Try to convert anything that isn't already an array symbol into a constant
+    out: list[ArraySymbol] = []
+    for array in arrays:
+        if isinstance(array, ArraySymbol):
+            if array.model is not model:
+                raise ValueError("given array symbols do not all share the same underlying model")
+            out.append(array)
+        else:
+            try:
+                out.append(model.constant(array))
+            except TypeError as err:
+                raise TypeError(f"{array!r} cannot be interpreted as an array symbol") from err
+
+    return tuple(out)
+
+
+@typing.overload
+def atleast_1d(array: ArraySymbol) -> ArraySymbol: ...
+@typing.overload
+def atleast_1d(*arrays: ArraySymbol) -> tuple[ArraySymbol, ...]: ...
+
+
+def atleast_1d(*arrays):
+    """Convert array symbols to array symbols with at least one dimension.
+
+    Args:
+        arrays: One or more array symbols.
+    Returns:
+        An array symbol, or a tuple of array symbols.
+
+    Examples:
+        >>> from dwave.optimization import atleast_1d, Model
+        ...
+        >>> model = Model()
+        >>> a = model.constant(1)
+        >>> b = model.constant([2])
+        >>> c, d = atleast_1d(a, b)
+        >>> c.shape()  # a is converted into a 1d array
+        (1,)
+        >>> d.shape()  # b is not changed
+        (1,)
+        >>> d is b
+        True
+        >>> e = model.constant([[0, 1, 2], [3, 4, 5]])
+        >>> f = atleast_1d(e)  # e is not changed
+        >>> f.shape()
+        (2, 3)
+        >>> f is e
+        True
+
+    See Also:
+        :func:`atleast_2d()`
+
+    .. versionadded:: 0.6.0
+    """
+    result: list[ArraySymbol] = []
+    for array in arrays:
+        if not isinstance(array, ArraySymbol):
+            raise TypeError(f"{array!r} is not an array symbol")
+        if array.ndim() == 0:
+            result.append(array.reshape(1))
+        else:
+            result.append(array)
+    if len(result) == 1:
+        return result[0]
+    return tuple(result)
+
+
+@typing.overload
+def atleast_2d(array: ArraySymbol) -> ArraySymbol: ...
+@typing.overload
+def atleast_2d(*arrays: ArraySymbol) -> tuple[ArraySymbol, ...]: ...
+
+
+def atleast_2d(*arrays):
+    """Convert array symbols to array symbols with at least two dimensions.
+
+    Args:
+        arrays: One or more array symbols.
+    Returns:
+        An array symbol, or a tuple of array symbols.
+
+    Examples:
+        >>> from dwave.optimization import atleast_2d, Model
+        ...
+        >>> model = Model()
+        >>> a = model.constant(1)
+        >>> b = model.constant([[2]])
+        >>> c, d = atleast_2d(a, b)
+        >>> c.shape()  # a is converted into a 2d array
+        (1, 1)
+        >>> d.shape()  # c is not changed
+        (1, 1)
+        >>> d is b
+        True
+        >>> e = model.constant([[0, 1, 2], [3, 4, 5]])
+        >>> f = atleast_2d(e)  # e is not changed
+        >>> f.shape()
+        (2, 3)
+        >>> f is e
+        True
+
+    See Also:
+        :func:`atleast_1d()`
+
+    .. versionadded:: 0.6.0
+    """
+    result: list[ArraySymbol] = []
+    for array in arrays:
+        if not isinstance(array, ArraySymbol):
+            raise TypeError(f"{array!r} is not an array symbol")
+        shape = array.shape()
+        if len(shape) == 0:
+            result.append(array.reshape(1, 1))
+        elif len(shape) == 1:
+            result.append(array.reshape(1, *shape))
+        else:
+            result.append(array)
+    if len(result) == 1:
+        return result[0]
+    return tuple(result)
+
+
+def broadcast_shapes(*shapes: int | tuple[int, ...]) -> tuple[int, ...]:
+    """Broadcast the input shapes into a single shape.
+
+    See NumPy's `broadcasting <https://numpy.org/doc/stable/user/basics.broadcasting.html>`_
+    documentation for more information about broadcasting.
+
+    ``broadcast_shapes()`` differs from :func:`numpy.broadcast_shapes()` by
+    handling dynamically shaped arrays.
+
+    Args:
+        *shapes: The shapes to be broadcast.
+
+    Returns:
+        The broadcasted shape.
+
+    Examples:
+        >>> from dwave.optimization import broadcast_shapes
+        >>> broadcast_shapes((1, 3), (2, 1))
+        (2, 3)
+        >>> broadcast_shapes((-1, 5), (1,))
+        (-1, 5)
+
+    See Also:
+        :func:`numpy.broadcast_shapes`
+
+        :func:`~dwave.optimization.mathematical.broadcast_symbols`
+
+    .. versionadded:: 0.6.11
+    """
+    shape: tuple[int, ...] = tuple()
+    for s in shapes:
+        if isinstance(s, numbers.Integral):
+            shape = _broadcast_shapes(shape, (int(s),))
+        else:
+            shape = _broadcast_shapes(shape, s)
+    return shape
+
+
+def broadcast_symbols(*args: ArraySymbol) -> tuple[ArraySymbol, ...]:
+    """Broadcast array symbols to the same shape.
+
+    See NumPy's `broadcasting <https://numpy.org/doc/stable/user/basics.broadcasting.html>`_
+    documentation for more information about broadcasting.
+
+    Args:
+        *args: Array symbols.
+
+    Returns:
+        A tuple of array symbols, all with the same shape.
+        If any given symbol already has the desired shape, then it is returned.
+        Otherwise a new :class:`~dwave.optimization.symbols.BroadcastTo` symbol
+        is returned.
+
+    Examples:
+        >>> from dwave.optimization import broadcast_symbols, Model
+        ...
+        >>> model = Model()
+        >>> x = model.integer(3)  # shape = (3,)
+        >>> y = model.constant([[0], [1]])  # shape = (2, 1)
+        >>> xb, yb = broadcast_symbols(x, y)
+        >>> xb.shape()
+        (2, 3)
+        >>> yb.shape()
+        (2, 3)
+
+    See Also:
+        :func:`~dwave.optimization.mathematical.broadcast_shapes`
+
+        :func:`~dwave.optimization.mathematical.broadcast_to`
+
+    .. versionadded:: 0.6.5
+    """
+    shape = broadcast_shapes(*(x.shape() for x in args))
+    return tuple(broadcast_to(x, shape) for x in args)
+
+
+def broadcast_to(x: ArraySymbol, shape: tuple[int, ...] | int) -> ArraySymbol:
+    """Broadcast an array symbol to a new shape.
+
+    See NumPy's `broadcasting <https://numpy.org/doc/stable/user/basics.broadcasting.html>`_
+    documentation for more information about broadcasting.
+
+    Args:
+        x: An array symbol.
+        shape: The desired shape. A single integer ``i`` is interpreted as ``(i,)``.
+
+    Returns:
+        If ``x`` already has the desired shape, then ``x`` is returned.
+        Otherwise a new :class:`~dwave.optimization.symbols.BroadcastTo` symbol
+        is returned.
+
+    Examples:
+        >>> from dwave.optimization import broadcast_to, Model
+        ...
+        >>> model = Model()
+        >>> x = model.constant([0, 1, 2, 3, 4])
+        >>> x.shape()
+        (5,)
+        >>> y = broadcast_to(x, (2, 5))
+        >>> y.shape()
+        (2, 5)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     y.state()
+        array([[0., 1., 2., 3., 4.], 
+               [0., 1., 2., 3., 4.]])
+
+    See Also:
+        :class:`~dwave.optimization.symbols.BroadcastTo`: equivalent symbol.
+
+        :func:`~dwave.optimization.mathematical.broadcast_shapes`
+
+        :func:`~dwave.optimization.mathematical.broadcast_symbols`
+
+    .. versionadded:: 0.6.5
+    """
+    # We only create a new symbol if necessary
+    if x.shape() == shape or (isinstance(shape, int) and x.shape() == (shape,)):
+        return x
+
+    return BroadcastTo(x, shape)
+
+
+def bspline(x: ArraySymbol, k: int, t: list, c: list) -> ArraySymbol:
+    """Return an array symbol with bspline values corresponding to x.
+
+    Args:
+        k: degree
+        t: knots
+        c: coefficients
+
+    See Also:
+        :class:`~dwave.optimization.BSpline`: equivalent symbol.
+
+    .. versionadded:: 0.5.4
+    """
+    return BSpline(x, k, t, c)
+
+
+def concatenate(arrays: typing.Sequence[ArraySymbol],
+                axis: int = 0,
+                ) -> ArraySymbol:
+    """Return the concatenation of one or more symbols on the given axis.
+
+    Args:
+        arrays: Array symbols to concatenate.
+        axis: The concatenation axis.
+
+    Returns:
+        A symbol that is the concatenation of the given symbols along the specified axis.
+
+    Examples:
+        This example concatenates two constant symbols along the first axis.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import concatenate
+        ...
+        >>> model = Model()
+        >>> a = model.constant([[0,1], [2,3]])
+        >>> b = model.constant([[4,5]])
+        >>> a_b = concatenate((a,b), axis=0)
+        >>> a_b.shape()
+        (3, 2)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     print(a_b.state(0))
+        [[0. 1.]
+         [2. 3.]
+         [4. 5.]]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Concatenate`: equivalent symbol.
+
+        :func:`~dwave.optimization.mathematical.hstack`,
+        :func:`~dwave.optimization.mathematical.stack`,
+        :func:`~dwave.optimization.mathematical.vstack`
+
+    .. versionadded:: 0.4.3
+    """
+    return Concatenate(arrays, axis=axis)
+
+
+def cos(x) -> Cos:
+    """Return an element-wise trigonometric cosine on the given symbol.
+
+    Args:
+        x: Array giving the angles, in radians.
+
+    Returns:
+        A symbol that propagates the trigonometric cosine of the values in ``x``.
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Cos`: equivalent symbol.
+
+    Examples:
+        >>> import numpy as np
+        >>> from dwave.optimization import Model, cos
+        ...
+        >>> model = Model()
+        >>> x = model.constant([0, np.pi / 2])
+        >>> y = cos(x)
+        ...
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(y.state())
+        [1.000000e+00 6.123234e-17]
+
+    .. versionadded:: 0.6.5
+    """
+    return Cos(x)
+
+
+@_binaryop(Divide)
+def divide(x1: ArraySymbolLike, x2: ArraySymbolLike) -> Divide:
+    r"""Return an element-wise division on the given symbols.
+
+    In the underlying directed acyclic expression graph, produces a
+    ``Divide`` node if two array nodes are provided.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that divides the given symbols element-wise.
+        Dividing two symbols returns a
+        :class:`~dwave.optimization.symbols.Divide`.
+
+    Examples:
+        This example divides two integer symbols.
+        Equivalently, you can use the ``/`` operator (e.g., :code:`i / j`).
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import divide
+        ...
+        >>> model = Model()
+        >>> i = model.integer(2, lower_bound=1)
+        >>> j = model.integer(2, lower_bound=1)
+        >>> k = divide(i, j)   # alternatively: k = i / j
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [21, 10])
+        ...     j.set_state(0, [7, 2])
+        ...     print(k.state(0))
+        [3. 5.]
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+@_binaryop(Equal)
+def equal(x1: ArraySymbolLike, x2: ArraySymbolLike) -> Equal:
+    """Return element-wise equality between two symbols.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that is the element-wise equality.
+
+    See Also:
+        :class:`~dwave.optimization.Equal`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def exp(x: ArraySymbol) -> Exp:
+    """Return the element-wise base-e exponential of the given symbol.
+
+    Args:
+        x: Input symbol.
+
+    Returns:
+        A symbol that propagates the values of the base-e exponential of a given symbol.
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import exp
+        ...
+        >>> model = Model()
+        >>> x = model.constant(1.0)
+        >>> exp_x = exp(x)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(exp_x.state())
+        2.718281828459045
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Exp`: equivalent symbol.
+
+    .. versionadded:: 0.6.2
+    """
+    return Exp(x)
+
+def expit(x: ArraySymbol) -> Expit:
+    """Return an element-wise logistic sigmoid on the given symbol.
+
+    Args:
+        x: Input symbol.
+
+    Returns:
+        A symbol that propagates the values of the logistic sigmoid of a given symbol.
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import expit
+        ...
+        >>> model = Model()
+        >>> x = model.constant(1.0)
+        >>> expit_x = expit(x)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(expit_x.state())
+        0.7310585786300049
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Expit`: equivalent symbol.
+
+    .. versionadded:: 0.5.2
+    """
+    return Expit(x)
+
+
+def extract(condition: ArraySymbol, arr: ArraySymbol) -> Extract:
+    """Return the elements of an array where the condition is true.
+
+    Args:
+        condition:
+            Where ``True``, return the corresponding element from ``arr``.
+        arr:
+            The input array.
+
+    Returns:
+        An :class:`~dwave.optimization.model.ArraySymbol`
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import extract
+        ...
+        >>> model = Model()
+        >>> condition = model.binary(3)
+        >>> arr = model.constant([4, 5, 6])
+        >>> extracted = extract(condition, arr)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     condition.set_state(0, [True, False, True])
+        ...     print(extracted.state())
+        [4. 6.]
+
+    .. versionadded:: 0.6.3
+    """
+    return Extract(condition, arr)
+
+
+def hstack(arrays: collections.abc.Sequence[ArraySymbol]) -> ArraySymbol:
+    """Stack a sequence of array symbols horizontally.
+
+    This is equivalent to concatenation along the second axis, except for 1-D
+    array symbols where it concatenates along the first axis.
+
+    Args:
+        arrays: Array symbols to be concatenated. Arrays must have the same
+            shape along all but the second axis unless they are 1d arrays.
+
+    Returns:
+        An array symbol.
+
+    Examples:
+
+        >>> from dwave.optimization import hstack, Model
+
+        >>> model = Model()
+        >>> model.states.resize(1)
+        ...
+        >>> a = model.constant([0])
+        >>> b = model.constant([1, 2, 3])
+        >>> h = hstack((a, b))
+        >>> with model.lock():
+        ...     h.state()
+        array([0., 1., 2., 3.])
+
+        >>> model = Model()
+        >>> model.states.resize(1)
+        ...
+        >>> a = model.constant([[0], [3]])
+        >>> b = model.constant([[1, 2], [4, 5]])
+        >>> h = hstack((a, b))
+        >>> with model.lock():
+        ...     h.state()
+        array([[0., 1., 2.],
+               [3., 4., 5.]])
+
+    See Also:
+        :func:`~dwave.optimization.mathematical.concatenate`,
+        :func:`~dwave.optimization.mathematical.stack`,
+        :func:`~dwave.optimization.mathematical.vstack`
+
+    .. versionadded:: 0.6.0
+    """
+    arrays = atleast_1d(*arrays)
+    if not isinstance(arrays, tuple):
+        arrays = (arrays,)
+    if arrays and arrays[0].ndim() == 1:
+        return concatenate(arrays, 0)
+    else:
+        return concatenate(arrays, 1)
+
+
+def isin(element: ArraySymbol, test_elements: ArraySymbol) -> IsIn:
+    """ Determine element-wise containment between two symbols. Given two
+    symbols: element and test_elements, returns an output array of the same
+    shape as element such that output[index] = True if element[index] is in
+    test_elements and False otherwise.
+
+    Args:
+        element: Input array.
+        test_elements: Input array containing the values against which to test
+                       each value of element. 
+
+    Examples:
+        >>> from dwave.optimization.model import Model
+        >>> from dwave.optimization.mathematical import isin
+        >>> model = Model()
+        >>> model.states.resize(1)
+        >>> element = model.constant([1.3, -1.0, 3.0])
+        >>> test_elements = model.constant([3.0, -1.1, -2.0, 4.1, -1.0])
+        >>> contains = isin(element, test_elements)
+        >>> with model.lock():
+        ...     print(contains.state(0))
+        [0. 1. 1.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.IsIn`: equivalent symbol.
+
+    .. versionadded:: 0.6.8
+    """
+    return IsIn(element, test_elements)
+
+
+class LPResult:
+    """The outputs of a linear program run."""
+
+    lp: LinearProgram
+    """The LinearProgram symbol."""
+
+    def __init__(self, lp: LinearProgram):
+        self.lp = lp
+
+    @functools.cached_property
+    def fun(self) -> LinearProgramObjectiveValue:
+        """The value of the objective as an array symbol."""
+        return LinearProgramObjectiveValue(self.lp)
+
+    @functools.cached_property
+    def success(self) -> LinearProgramFeasible:
+        """``True`` if the linear program found the optimal value as an array symbol."""
+        return LinearProgramFeasible(self.lp)
+
+    @functools.cached_property
+    def x(self) -> LinearProgramSolution:
+        """The assignments to the decision variables as an array symbol."""
+        return LinearProgramSolution(self.lp)
+
+
+@_binaryop(LessEqual)
+def less_equal(x1: ArraySymbolLike, x2: ArraySymbolLike) -> LessEqual:
+    """Return element-wise less than or equal between two symbols.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that is the element-wise less than or equal.
+
+    See Also:
+        :class:`~dwave.optimization.LessEqual`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def linprog(
+        c: ArraySymbol,
+        A_ub: typing.Optional[ArraySymbol] = None,  # alias for A
+        b_ub: typing.Optional[ArraySymbol] = None,
+        A_eq: typing.Optional[ArraySymbol] = None,
+        b_eq: typing.Optional[ArraySymbol] = None,
+        *,  # the args up until here match SciPy's linprog() which accepts them positionally
+        b_lb: typing.Optional[ArraySymbol] = None,
+        A: typing.Optional[ArraySymbol] = None,
+        lb: typing.Optional[ArraySymbol] = None,
+        ub: typing.Optional[ArraySymbol] = None,
+        ) -> LPResult:
+    r"""Solve a :term:`linear program` defined by the input array symbol(s).
+
+    Linear programs solve problems of the form:
+
+    .. math::
+        \text{minimize:} \\
+        & c^T x \\
+        \text{subject to:} \\
+        b_{lb} &\leq A x &\leq b_{ub} \\
+        b_{eq} &= A_{eq} x \\
+        l &\leq x &\leq u
+
+    Or, equivalently:
+
+    .. math::
+        \text{minimize:} \\
+        & c^T x \\
+        \text{subject to:} \\
+        A_{ub} x &\leq b_{ub} \\
+        A_{eq} x &= b_{eq} \\
+        l &\leq x &\leq u
+
+    Args:
+        c: A 1D array symbol giving the coefficients of the linear objective.
+        b_lb: A 1D array symbol giving the linear inequality lower bounds.
+        A: A 2D array symbol giving the linear inequality matrix. At most one
+            of ``A_ub`` and ``A`` may be provided.
+        b_ub: A 1D array symbol giving the linear inequality upper bounds.
+        A_eq: A 2D array symbol giving the linear equality matrix.
+        b_eq: A 1D array symbol giving the linear equality bounds.
+        A_ub: An alias of ``A``.
+        lb: A 1D array symbol giving the lower bounds on ``x``.
+        ub: A 1D array symbol giving the upper bounds on ``x``.
+
+    Returns:
+        An ``LPResult`` class containing the results of the LP. It has the
+        following attributes:
+
+        * **fun** - The value of the objective as a
+          :class:`~dwave.optimization.symbols.LinearProgramObjectiveValue`.
+        * **success** - Whether the linear program found an optimial value as a
+          :class:`~dwave.optimization.symbols.LinearProgramFeasible`.
+        * **x** - The assignments to the decision variables as a
+          :class:`~dwave.optimization.symbols.LinearProgramSolution`.
+
+    See Also:
+        :class:`~dwave.optimization.symbols.LinearProgram`,
+        :class:`~dwave.optimization.symbols.LinearProgramFeasible`,
+        :class:`~dwave.optimization.symbols.LinearProgramObjectiveValue`,
+        :class:`~dwave.optimization.symbols.LinearProgramSolution`: The associated symbols.
+
+        :func:`scipy.optimize.linprog()`: A function in SciPy that this function
+        is designed to mimic.
+
+    Examples:
+        The linear program
+
+        .. math::
+            \text{minimize: } & -x_0 - 2x_1 \\
+            \text{subject to: } & x_0 + x_1 &<= 1
+
+        can be represented with symbols
+
+        >>> from dwave.optimization import linprog, Model
+
+        >>> model = Model()
+        >>> c = model.constant([-1, -2])
+        >>> A_ub = model.constant([[1, 1]])
+        >>> b_ub = model.constant([1])
+        >>> res = linprog(c, A_ub=A_ub, b_ub=b_ub)
+        >>> _ = model.add_constraint(res.success)  # tell the model you want feasible solutions
+        ...
+        >>> model.states.resize(1)
+        >>> x = res.x
+        >>> with model.lock():
+        ...     x.state()
+        array([0., 1.])
+
+    .. versionadded:: 0.6.0
+    """
+    if A is not None and A_ub is not None:
+        raise ValueError("can provide A or A_ub, but not both")
+    elif A_ub is not None:
+        A = A_ub
+
+    return LPResult(LinearProgram(c, b_lb, A, b_ub, A_eq, b_eq, lb, ub))
+
+
+def log(x: ArraySymbol) -> Log:
+    """Return an element-wise natural logarithm on the given symbol.
+
+    Args:
+        x: Input symbol.
+
+    Returns:
+        A symbol that propagates the values of the natural logarithm of a given symbol.
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import log
+        ...
+        >>> model = Model()
+        >>> x = model.constant(1.0)
+        >>> log_x = log(x)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(log_x.state())
+        0.0
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Log`: equivalent symbol.
+
+    .. versionadded:: 0.5.2
+    """
+    return Log(x)
+
+
+def logical(x: ArraySymbol) -> Logical:
+    r"""Return the element-wise truth value on the given symbol.
+
+    Args:
+        x: Input array symbol.
+
+    Returns:
+        A symbol that propagates the element-wise truth value of the given symbol.
+
+    Examples:
+        This example shows the truth values an array symbol.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import logical
+        ...
+        >>> model = Model()
+        >>> x = model.constant([0, 1, -2, .5])
+        >>> logical_x = logical(x)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(logical_x.state())
+        [0. 1. 1. 1.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Logical`: equivalent symbol.
+    """
+    return Logical(x)
+
+
+@_binaryop(And)
+def logical_and(x1: ArraySymbolLike, x2: ArraySymbolLike) -> And:
+    r"""Return an element-wise logical AND on the given symbols.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that is the element-wise AND of the given symbols.
+
+    Examples:
+        This example ANDs two binary symbols of size :math:`1 \times 3`.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import logical_and
+        ...
+        >>> model = Model()
+        >>> x = model.binary(3)
+        >>> y = model.binary(3)
+        >>> z = logical_and(x, y)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     x.set_state(0, [True, True, False])
+        ...     y.set_state(0, [False, True, False])
+        ...     print(z.state(0))
+        [0. 1. 0.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.And`: equivalent symbol.
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def logical_not(x: ArraySymbol) -> Not:
+    r"""Return an element-wise logical NOT on the given symbol.
+
+    Args:
+        x: Input array symbol.
+
+    Returns:
+        A symbol that propagates the element-wise NOT of the given symbol.
+
+    Examples:
+        This example negates an array symbol.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import logical_not
+        ...
+        >>> model = Model()
+        >>> x = model.constant([0, 1, -2, .5])
+        >>> not_x = logical_not(x)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(not_x.state())
+        [1. 0. 0. 0.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Not`: equivalent symbol.
+    """
+    return Not(x)
+
+
+@_binaryop(Or)
+def logical_or(x1: ArraySymbolLike, x2: ArraySymbolLike) -> Or:
+    r"""Return an element-wise logical OR on the given symbols.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that is the element-wise OR of the given symbols.
+
+    Examples:
+        This example ORs two binary symbols of size :math:`1 \times 3`.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import logical_or
+        ...
+        >>> model = Model()
+        >>> x = model.binary(3)
+        >>> y = model.binary(3)
+        >>> z = logical_or(x, y)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     x.set_state(0, [True, True, False])
+        ...     y.set_state(0, [False, True, False])
+        ...     print(z.state(0))
+        [1. 1. 0.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Or`: equivalent symbol.
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+@_binaryop(Xor)
+def logical_xor(x1: ArraySymbolLike, x2: ArraySymbolLike) -> Xor:
+    r"""Return an element-wise logical XOR on the given symbols.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that is the element-wise XOR of the given symbols.
+
+    Examples:
+        This example XORs two binary symbols of size :math:`1 \times 3`.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import logical_xor
+        ...
+        >>> model = Model()
+        >>> x = model.binary(3)
+        >>> y = model.binary(3)
+        >>> z = logical_xor(x, y)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     x.set_state(0, [True, True, False])
+        ...     y.set_state(0, [False, True, False])
+        ...     print(z.state(0))
+        [1. 0. 0.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Xor`: equivalent symbol.
+
+    .. versionadded:: 0.4.1
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def matmul(x: ArraySymbolLike, y: ArraySymbolLike) -> MatrixMultiply:
+    r"""Compute the matrix product of two array symbols.
+
+    Args:
+        x, y: Operand array symbols. The size of the last axis of `x` must be
+            equal to the size of the second to last axis of `y`. If `x` or `y`
+            are 1-d, they will treated as if they a row or column vector
+            respectively. If both are 1-d, this will produce a scalar (and the
+            operation is equivalent to the dot product of two vectors).
+
+            Otherwise, if it is possible that the shapes can be broadcast
+            together, either by broadcasting missing leading axes (e.g.
+            `(2, 5, 3, 4, 2)` and `(2, 6)` -> `(2, 5, 3, 4, 6)`) or by
+            broadcasting axes for which one of the operands has size 1 (e.g.
+            `(3, 1, 4, 2)` and `(1, 7, 2, 3)` -> `(3, 7, 4, 3)`), then this
+            will return the result after broadcasting.
+
+    Returns:
+        A MatrixMultiply symbol representing the matrix product. If `x` and
+        `y` have shapes `(..., n, k)` and `(..., k, m)`, then the output will
+        have shape `(..., n, m)`.
+
+    Examples:
+        This example computes the dot product of two integer arrays.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import matmul
+        ...
+        >>> model = Model()
+        >>> i = model.integer(3)
+        >>> j = model.integer(3)
+        >>> m = matmul(i, j)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [1, 2, 3])
+        ...     j.set_state(0, [4, 5, 6])
+        ...     print(m.state(0))
+        32.0
+
+    See Also:
+        :class:`~dwave.optimization.symbols.MatrixMultiply`: equivalent symbol.
+
+    .. versionadded:: 0.6.10
+    """
+    x, y = as_array_symbols(x, y)
+
+    if not (x.ndim() == 1 or y.ndim() == 1) and x.shape()[:-2] != y.shape()[:-2]:
+        # The shapes don't match, but it may be possible to do a broadcast. The
+        # vector broadcast case is handled by MatrixMultiplyNode, so we need to
+        # handle all the other cases by adding one or two BroadcastNodes.
+        x_shape = [1,] * (y.ndim() - x.ndim()) + list(x.shape())
+        y_shape = [1,] * (x.ndim() - y.ndim()) + list(y.shape())
+
+        for i in range(len(x_shape) - 2):
+            if x_shape[i] == 1:
+                x_shape[i] = y_shape[i]
+            elif y_shape[i] == 1:
+                y_shape[i] = x_shape[i]
+            elif x_shape[i] != y_shape[i]:
+                raise ValueError("Could not broadcast operands")
+
+        if tuple(x_shape) != x.shape():
+            x = broadcast_to(x, tuple(x_shape))
+        if tuple(y_shape) != y.shape():
+            y = broadcast_to(y, tuple(y_shape))
+
+        return MatrixMultiply(x, y)
+
+    return MatrixMultiply(x, y)
+
+
+@_binaryop(Maximum, NaryMaximum)
+def maximum(
+    x1: ArraySymbolLike,
+    x2: ArraySymbolLike,
+    *xi: ArraySymbolLike,
+) -> Maximum | NaryMaximum:
+    """Return an element-wise maximum of the given symbols.
+
+    In the underlying directed acyclic expression graph, produces a
+    ``Maximum`` node if two array nodes are provided and a
+    ``NaryMaximum`` node otherwise.
+
+    Args:
+        x1, x2: Input array symbol.
+        *xi: Additional input array symbols.
+
+    Returns:
+        A symbol that is the element-wise maximum of the given symbols.
+        Taking the element-wise maximum of two symbols returns a
+        :class:`~dwave.optimization.symbols.Maximum`.
+        Taking the element-wise maximum of three or more symbols returns a
+        :class:`~dwave.optimization.symbols.NaryMaximum`.
+
+    Examples:
+        This example maximizes two integer symbols of size :math:`1 \times 2`.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import maximum
+        ...
+        >>> model = Model()
+        >>> i = model.integer(2)
+        >>> j = model.integer(2)
+        >>> m = maximum(i, j)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [3, 5])
+        ...     j.set_state(0, [7, 2])
+        ...     print(m.state(0))
+        [7. 5.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Maximum`
+
+        :class:`~dwave.optimization.symbols.NaryMaximum`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def mean(array: ArraySymbol) -> Mean:
+    r"""Return mean of given symbol.
+
+    Args:
+        array: Input array symbol.
+
+    Returns:
+        A symbol that is the mean of given symbol. If given symbol is empty, 
+        mean defaults to 0.0.
+
+    Examples:
+        This example takes the mean of one symbol.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import mean
+        ...
+        >>> model = Model()
+        >>> i = model.integer(3)
+        >>> m = mean(i)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [8, 4, 3])
+        ...     print(m.state(0))
+        5.0
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Mean`: equivalent symbol.
+
+    .. versionadded:: 0.6.4
+    """
+    return Mean(array)
+
+
+@_binaryop(Minimum, NaryMinimum)
+def minimum(
+    x1: ArraySymbolLike,
+    x2: ArraySymbolLike,
+    *xi: ArraySymbolLike,
+) -> Minimum | NaryMinimum:
+    r"""Return an element-wise minimum of the given symbols.
+
+    In the underlying directed acyclic expression graph, produces a
+    ``Minimum`` node if two array nodes are provided and a
+    ``NaryMinimum`` node otherwise.
+
+    Args:
+        x1, x2: Input array symbol.
+        *xi: Additional input array symbols.
+
+    Returns:
+        A symbol that is the element-wise minimum of the given symbols.
+        Taking the element-wise minimum of two symbols returns a
+        :class:`~dwave.optimization.symbols.Minimum`.
+        Taking the element-wise minimum of three or more symbols returns a
+        :class:`~dwave.optimization.symbols.NaryMinimum`.
+
+    Examples:
+        This example minimizes two integer symbols of size :math:`1 \times 2`.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import minimum
+        ...
+        >>> model = Model()
+        >>> i = model.integer(2)
+        >>> j = model.integer(2)
+        >>> m = minimum(i, j)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [3, 5])
+        ...     j.set_state(0, [7, 2])
+        ...     print(m.state(0))
+        [3. 2.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Minimum`
+
+        :class:`~dwave.optimization.symbols.NaryMinimum`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+@_binaryop(Modulus)
+def mod(x1: ArraySymbolLike, x2: ArraySymbolLike) -> Modulus:
+    r"""Return an element-wise modulus of the given symbols.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that is the element-wise modulus of the given symbols.
+
+    Examples:
+        This example demonstrates the behavior of the modulus of two integer
+        symbols :math:`i \mod{j}` with different combinations of positive and
+        negative values. Equivalently, you can use the ``%`` operator
+        (e.g., :code:`i % j`).
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import mod
+        ...
+        >>> model = Model()
+        >>> i = model.integer(4, lower_bound=-5)
+        >>> j = model.integer(4, lower_bound=-3)
+        >>> k = mod(i, j) # alternatively: k = i % j
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [5, -5, 5, -5])
+        ...     j.set_state(0, [3, 3, -3, -3])
+        ...     print(k.state(0))
+        [ 2.  1. -1. -2.]
+
+        This example demonstrates the modulus of a scalar float value and a
+        binary symbol.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import mod
+        ...
+        >>> model = Model()
+        >>> i = model.constant(0.33)
+        >>> j = model.binary(2)
+        >>> k = mod(i, j) # alternatively: k = i % j
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     j.set_state(0, [0, 1])
+        ...     print(k.state(0))
+        [0.   0.33]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Modulus`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+@_binaryop(Multiply, NaryMultiply)
+def multiply(
+    x1: ArraySymbolLike,
+    x2: ArraySymbolLike,
+    *xi: ArraySymbolLike,
+) -> Multiply | NaryMultiply:
+    r"""Return an element-wise multiplication on the given symbols.
+
+    In the underlying directed acyclic expression graph, produces a
+    ``Multiply`` node if two array nodes are provided and a
+    ``NaryMultiply`` node otherwise.
+
+    Args:
+        x1, x2: Input array symbol.
+        *xi: Additional input array symbols.
+
+    Returns:
+        A symbol that multiplies the given symbols element-wise.
+        Multipying two symbols returns a
+        :class:`~dwave.optimization.symbols.Multiply`.
+        Multiplying three or more symbols returns a
+        :class:`~dwave.optimization.symbols.NaryMultiply`.
+
+    Examples:
+        This example multiplies two integer symbols of size :math:`1 \times 2`.
+        Equivalently, you can use the ``*`` operator (e.g., :code:`i * j`).
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import multiply
+        ...
+        >>> model = Model()
+        >>> i = model.integer(2)
+        >>> j = model.integer(2)
+        >>> k = multiply(i, j)   # alternatively: k = i * j
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [3, 5])
+        ...     j.set_state(0, [7, 2])
+        ...     print(k.state(0))
+        [21. 10.]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Multiply`
+
+        :class:`~dwave.optimization.symbols.NaryMultiply`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def put(array: ArraySymbol, indices: ArraySymbol, values: ArraySymbol) -> Put:
+    r"""Replace the specified elements in an array with given values.
+
+    This function is roughly equivalent to the following function defined for
+    NumPy arrays.
+
+    .. code-block:: python
+
+        def put(array, indices, values):
+            array = array.copy()
+            array.flat[indices] = values
+            return array
+
+    Args:
+        array: Base array. Must be not be a dynamic array nor a scalar.
+        indices:
+            The indices in the flattened base array to be replaced.
+
+            .. warning::
+                If ``indices`` has duplicate values, it is undefined which
+                of the possible corresponding values from ``values`` will
+                be propagated.
+                This will likely hurt the performance of the model.
+                Care should be taken to ensure that ``indices`` does not
+                contain duplicates.
+
+        values: Values to place in ``array`` at ``indices``.
+
+    Examples:
+        For some models, it is useful to overwrite some elements in an array.
+
+        >>> import numpy as np
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization import put
+        ...
+        >>> model = Model()
+        ...
+        >>> array = model.constant(np.zeros((3, 3)))
+        >>> indices = model.constant([0, 1, 2])
+        >>> values = model.integer(3)
+        >>> array = put(array, indices, values)  # replace array with one that has been overwritten
+        ...
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     values.set_state(0, [10, 20, 30])
+        ...     print(array.state(0))
+        [[10. 20. 30.]
+         [ 0.  0.  0.]
+         [ 0.  0.  0.]]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Put`: equivalent symbol.
+
+        :func:`numpy.put`: The NumPy function that this function emulates for
+        :class:`~dwave.optimization.model.ArraySymbol`\s.
+
+    .. versionadded:: 0.4.4
+    """
+    return Put(array, indices, values)
+
+
+def resize(
+        array: ArraySymbol,
+        shape: typing.Union[int, collections.abc.Sequence[int]],
+        fill_value: typing.Optional[float] = None,
+) -> Resize:
+    """Return a new :class:`~dwave.optimization.symbols.Resize` symbol with the given shape.
+
+    Args:
+        array: An array symbol.
+        shape: Shape of the new array. All dimension sizes must be non-negative.
+        fill_value: The value to be used if the resulting array is larger than
+            the given one. Defaults to 0.
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import resize
+        ...
+        >>> model = Model()
+        >>> s = model.set(10)  # subsets of range(10)
+        >>> s_2x2 = resize(s, (2, 2), fill_value=-1)
+        ...
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     s.set_state(0, [0, 1, 2])
+        ...     print(s_2x2.state(0))
+        [[ 0.  1.]
+         [ 2. -1.]]
+
+    Returns:
+        A :class:`~dwave.optimization.symbols.Resize` symbol.
+
+    See also:
+        :class:`~dwave.optimization.symbols.Resize`: equivalent symbol.
+
+        :meth:`ArraySymbol.resize() <dwave.optimization.model.ArraySymbol.resize>`: equivalent method.
+
+    .. versionadded:: 0.6.4
+    """
+    return Resize(array, shape, fill_value=fill_value)
+
+
+def rint(x: ArraySymbol) -> Rint:
+    """Return an element-wise round to the nearest integer on the given symbol.
+
+    Args:
+        x: Input symbol.
+
+    Returns:
+        A symbol that propagates the values of the given symbol rounded to the
+        nearest integer.
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import rint
+        ...
+        >>> model = Model()
+        >>> x = model.constant(1.3)
+        >>> rint_x = rint(x)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(rint_x.state())
+        1.0
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Rint`: equivalent symbol.
+    """
+    return Rint(x)
+
+
+def roll(
+    array: ArraySymbol,
+    shift: ArraySymbol | tuple[int, ...] | int,
+    axis: None | tuple[int, ...] | int = None,
+) -> Roll:
+    """Roll array elements along the given axis.
+
+    Args:
+        array: The input array.
+        shift: The number of places to shift the elements. If ``axis`` is given
+            then ``shift`` must be a single number that applies to all axes, or
+            the same length as ``axis``.
+        axis: The axis or axes to be shifted. If not provided the array is treated
+            as flat while shifting.
+
+    Examples:
+        >>> from dwave.optimization import Model, roll
+        ...
+        >>> model = Model()
+        >>> x = model.constant(range(10))
+        >>> r0 = roll(x, 2)
+        >>> r1 = roll(x, -2)
+        >>> r2 = roll(x.reshape(2, 5), shift=1, axis=0)
+        >>> r3 = roll(x.reshape(2, 5), shift=[1, 2], axis=[1, 0])
+        ...
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(r0.state())
+        ...     print(r1.state())
+        ...     print(r2.state())
+        ...     print(r3.state())
+        [8. 9. 0. 1. 2. 3. 4. 5. 6. 7.]
+        [2. 3. 4. 5. 6. 7. 8. 9. 0. 1.]
+        [[5. 6. 7. 8. 9.]
+         [0. 1. 2. 3. 4.]]
+        [[4. 0. 1. 2. 3.]
+         [9. 5. 6. 7. 8.]]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Roll`: equivalent symbol.
+
+    .. versionadded:: 0.6.9
+    """
+    return Roll(array, shift=shift, axis=axis)
+
+
+@_binaryop(SafeDivide)
+def safe_divide(x1: ArraySymbolLike, x2: ArraySymbolLike) -> SafeDivide:
+    r"""Divide the symbols element-wise, substituting ``0`` where ``x2 == 0``.
+
+    This function is not strictly mathematical division. Rather it encodes
+    the following function:
+
+    .. math::
+        f(a, b) = \begin{cases}
+            a / b & \text{for } b \neq 0 \\
+            0 & \text{else}
+        \end{cases}
+
+    Such a definition is useful [#buzzard]_ in cases where ``x2`` is non-zero by
+    construction or otherwise enforced to be non-zero.
+
+    .. [#buzzard] Buzzard, Kevin (5 Jul 2020),
+       `"Division by zero in type theory: a FAQ" <xena_>`_,
+       Xena Project (Blog), retrieved 2025-05-20
+    .. _xena: https://xenaproject.wordpress.com/2020/07/05/division-by-zero-in-type-theory-a-faq/
+
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import safe_divide
+        ...
+        >>> model = Model()
+        >>> a = model.constant([-1, 0, 1, 2])
+        >>> b = model.constant([2, 1, 0, -1])
+        >>> x = safe_divide(a, b)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(x.state())
+        [-0.5  0.   0.  -2. ]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.SafeDivide`: equivalent symbol.
+
+    .. versionadded:: 0.6.2
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def sin(x) -> Sin:
+    """Return an element-wise trigonometric sine on the given symbol.
+
+    Args:
+        x: Array giving the angles, in radians.
+
+    Returns:
+        A symbol that propagates the trigonometric sine of the values in ``x``.
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Sin`: equivalent symbol.
+
+    Examples:
+        >>> import numpy as np
+        >>> from dwave.optimization import Model, sin
+        ...
+        >>> model = Model()
+        >>> x = model.constant([0, np.pi / 2])
+        >>> y = sin(x)
+        ...
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(y.state())
+        [0. 1.]
+
+    .. versionadded:: 0.6.5
+    """
+    return Sin(x)
+
+
+def softmax(array: ArraySymbol) -> SoftMax:
+    """Return softmax of a given symbol. Given a flattened array 
+    x: [x_1, x_2, ..., x_n], softmax(x) returns an array [y_1, y_2, ..., y_n] 
+    such that y_i = exp(x_i) / (exp(x_1) + exp(x_2) + ... + exp(x_n)).
+
+    Args:
+        array: Input array symbol.
+
+    Example:
+        This example computes the softmax of one symbol.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import softmax
+        >>> import numpy as np
+        ...
+        >>> model = Model()
+        >>> i = model.integer(3)
+        >>> sm = softmax(i)
+        >>> expected = np.array([0.0900305731703, 0.6652409557748, 0.244728471054])
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     i.set_state(0, [1, 3, 2])
+        ...     print(np.isclose(sm.state(), expected).all())
+        True
+
+    See Also:
+        :class:`~dwave.optimization.symbols.SoftMax`: equivalent symbol.
+
+    .. versionadded:: 0.6.5
+    """
+    return SoftMax(array)
+
+
+def sqrt(x: ArraySymbol) -> SquareRoot:
+    r"""Return an element-wise sqrt on the given symbol.
+    Args:
+        x: Input symbol.
+    Returns:
+        A symbol that propagates the sqrt of the given symbol.
+    Examples:
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import sqrt
+        ...
+        >>> model = Model()
+        >>> x = model.constant(16)
+        >>> sqrt_x = sqrt(x)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(sqrt_x.state())
+        4.0
+    See Also:
+        :class:`~dwave.optimization.symbols.SquareRoot`: equivalent symbol.
+    """
+    return SquareRoot(x)
+
+
+def stack(arrays: collections.abc.Sequence[ArraySymbol], axis: int = 0) -> ArraySymbol:
+    """Joins a sequence of ArraySymbols along a new axis.
+
+    Args:
+        arrays: sequence of ArraySymbol
+    Returns:
+        The joined ArraySymbols on a new axis
+    Examples:
+        This example stacks three scalars on the first axis.
+
+        >>> from dwave.optimization import Model, stack
+        ...
+        >>> model = Model()
+        >>> x = [model.constant(1), model.constant(2), model.constant(3)]
+        >>> s = stack(x)
+        >>> s.shape()
+        (3,)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     print(s.state(0))
+        [1. 2. 3.]
+
+        This example stacks three 1d arrays on axis 0 and 1
+
+        >>> from dwave.optimization import Model, stack
+        ...
+        >>> model = Model()
+        >>> a = model.constant([1,2])
+        >>> b = model.constant([3,4])
+        >>> c = model.constant([5,6])
+        >>> s0 = stack((a,b,c), axis=0)
+        >>> s0.shape()
+        (3, 2)
+        >>> s1 = stack((a,b,c), axis=1)
+        >>> s1.shape()
+        (2, 3)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     print(s0.state(0))
+        ...     print(s1.state(0))
+        [[1. 2.]
+         [3. 4.]
+         [5. 6.]]
+        [[1. 3. 5.]
+         [2. 4. 6.]]
+
+    See Also:
+        :func:`~dwave.optimization.mathematical.concatenate`,
+        :func:`~dwave.optimization.mathematical.hstack`,
+        :func:`~dwave.optimization.mathematical.vstack`
+
+    .. versionadded:: 0.5.0
+    """
+    if (not isinstance(arrays, collections.abc.Sequence) or
+            not all(isinstance(arr, ArraySymbol) for arr in arrays)):
+        raise TypeError("stack() takes a sequence of array symbols of the same shape")
+
+    if len(arrays) == 0:
+        raise ValueError("need at least one array symbol to stack")
+
+    shape = arrays[0].shape()
+
+    if not all(arr.shape() == shape for arr in arrays):
+        raise ValueError("all input array symbols must have the same shape")
+
+    if not 0 <= axis <= len(shape):
+        raise ValueError(f'axis {axis} is out of bounds for array'
+                         f' of dimension {len(shape) + 1}')
+
+    new_shape = tuple(shape[:axis]) + (1,) + (shape[axis:])  # add the axis and then concatenate
+    return concatenate([arr.reshape(new_shape) for arr in arrays], axis)
+
+
+@_binaryop(Subtract)
+def subtract(x1: ArraySymbolLike, x2: ArraySymbolLike) -> Subtract:
+    """Return the element-wise subtraction of two symbols.
+
+    Args:
+        x1, x2: Input array symbol.
+
+    Returns:
+        A symbol that is the element-wise subtraction.
+
+    See Also:
+        :class:`~dwave.optimization.Subtract`
+    """
+    raise RuntimeError("implemented by the _binaryop() decorator")
+
+
+def tanh(x) -> Tanh:
+    """Return an element-wise trigonometric hyperbolic tangent on the given symbol.
+
+    Args:
+        x: Array giving the angles, in radians.
+
+    Returns:
+        A symbol that propagates the trigonometric hyperbolic tangent of the values in ``x``.
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Tanh`: equivalent symbol.
+
+    Examples:
+        >>> import numpy as np
+        >>> from dwave.optimization import Model, tanh
+        ...
+        >>> model = Model()
+        >>> x = model.constant([0, np.pi / 2])
+        >>> y = tanh(x)
+        ...
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(y.state())
+        [0.         0.91715234]
+
+    .. versionadded:: 0.6.11
+    """
+    return Tanh(x)
+
+
+def transpose(array: ArraySymbol) -> Transpose:
+    r"""Return transpose of the given symbol.
+
+    Args:
+        array: Input symbol. If array is dynamic, it must have dimension at
+        most one.
+
+    Returns:
+        A symbol that is the transpose of the given symbol. For a 1-D array,
+        this returns an unchanged view of the original array. For a 2-D array,
+        this is the standard matrix transpose. For an n-D array, the transpose
+        simply reverses the order of the axes.
+
+    Examples:
+        This example takes the transpose of a 5 element vector.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import transpose
+        ...
+        >>> model = Model()
+        >>> array = model.constant([0, 1, 2, 3, 4])
+        >>> transpose = transpose(array)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(transpose.state())
+        [0. 1. 2. 3. 4.]
+
+
+        This example takes the transpose of a :math:`2 \times 3` matrix.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import transpose
+        ...
+        >>> model = Model()
+        >>> array = model.constant([[0, 1, 2], [3, 4, 5]])
+        >>> transpose = transpose(array)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(transpose.state())
+        [[0. 3.]
+         [1. 4.]
+         [2. 5.]]
+
+
+        This example takes the transpose of a :math:`2 \times 3 \times 2` matrix.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import transpose
+        ...
+        >>> model = Model()
+        >>> array = model.constant([[[0, 1], [2, 3], [4, 5]], [[6, 7], [8, 9], [10, 11]]])
+        >>> transpose = transpose(array)
+        >>> model.states.resize(1)
+        >>> with model.lock():
+        ...     print(transpose.state())
+        [[[ 0.  6.]
+          [ 2.  8.]
+          [ 4. 10.]]
+        <BLANKLINE>
+         [[ 1.  7.]
+          [ 3.  9.]
+          [ 5. 11.]]]
+
+    See Also:
+        :class:`~dwave.optimization.symbols.Transpose`: equivalent symbol.
+
+    .. versionadded:: 0.6.8
+    """
+    return Transpose(array)
+
+
+def vstack(arrays: collections.abc.Sequence[ArraySymbol]) -> ArraySymbol:
+    """Stack a sequence of array symbols vertically.
+
+    This is equivalent to concatenation along the first axis.
+
+    Args:
+        arrays: Array symbols to be concatenated. Arrays must have the same
+            shape along all but the first axis unless they are 0d or 1d arrays.
+
+    Returns:
+        An array symbol.
+
+    Examples:
+
+        >>> from dwave.optimization import vstack, Model
+
+        >>> model = Model()
+        >>> model.states.resize(1)
+        ...
+        >>> a = model.constant([0])
+        >>> b = model.constant([1])
+        >>> h = stack((a, b))
+        >>> with model.lock():
+        ...     h.state()
+        array([[0.],
+               [1.]])
+
+        >>> model = Model()
+        >>> model.states.resize(1)
+        ...
+        >>> a = model.constant([0, 1, 2])
+        >>> b = model.constant([[3, 4, 5], [6, 7, 8]])
+        >>> h = vstack((a, b))
+        >>> with model.lock():
+        ...     h.state()
+        array([[0., 1., 2.],
+               [3., 4., 5.],
+               [6., 7., 8.]])
+
+    See Also:
+        :func:`~dwave.optimization.mathematical.concatenate`,
+        :func:`~dwave.optimization.mathematical.stack`,
+        :func:`~dwave.optimization.mathematical.vstack`
+
+    .. versionadded:: 0.6.0
+    """
+    arrays = atleast_2d(*arrays)
+    if not isinstance(arrays, tuple):
+        arrays = (arrays,)
+    return concatenate(arrays, 0)
+
+
+def where(condition: ArraySymbol, x: ArraySymbol, y: ArraySymbol) -> Where:
+    """Return elements chosen from x or y depending on condition.
+
+    Args:
+        condition:
+            Where ``True``, yield ``x``, otherwise yield ``y``.
+        x, y:
+            Values from which to choose.
+            If ``x`` and ``y`` are dynamically sized then ``condition``
+            must be a single value.
+
+    Returns:
+        An :class:`~dwave.optimization.model.ArraySymbol`
+        with elements from ``x`` where ``condition`` is ``True``,
+        and elements from ``y`` elsewhere.
+
+    Examples:
+
+        This example uses a single binary variable to choose between two arrays.
+
+        >>> from dwave.optimization import Model
+        >>> from dwave.optimization.mathematical import where
+        ...
+        >>> model = Model()
+        >>> condition = model.binary()
+        >>> x = model.constant([1., 2., 3.])
+        >>> y = model.constant([4., 5., 6.])
+        >>> a = where(condition, x, y)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     condition.set_state(0, False)
+        ...     print(a.state())
+        [4. 5. 6.]
+
+        This example uses a binary array to to select between two arrays.
+
+        >>> model = Model()
+        >>> condition = model.binary(3)
+        >>> x = model.constant([1., 2., 3.])
+        >>> y = model.constant([4., 5., 6.])
+        >>> a = where(condition, x, y)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     condition.set_state(0, [True, True, False])
+        ...     print(a.state())
+        [1. 2. 6.]
+
+        This example uses a single binary variable to choose between two sets.
+
+        >>> model = Model()
+        >>> condition = model.binary()
+        >>> x = model.set(10)  # any subset of range(10)
+        >>> y = model.set(10)  # any subset of range(10)
+        >>> a = where(condition, x, y)
+        >>> with model.lock():
+        ...     model.states.resize(1)
+        ...     condition.set_state(0, True)
+        ...     x.set_state(0, [0., 2., 3.])
+        ...     y.set_state(0, [1])
+        ...     print(a.state())
+        [0. 2. 3.]
+
+    """
+    return Where(condition, x, y)

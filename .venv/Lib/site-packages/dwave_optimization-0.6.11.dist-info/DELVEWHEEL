@@ -1,0 +1,2 @@
+Version: 1.11.2
+Arguments: ['C:\\Users\\circleci\\AppData\\Local\\Temp\\cibw-run-7yufedi9\\cp312-win_amd64\\build\\venv\\Scripts\\delvewheel', 'repair', '--add-path', 'C:/Users/circleci/AppData/Local/Temp/cibw-run-7yufedi9/cp312-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', '--namespace-pkg', 'dwave', '-w', 'C:\\Users\\circleci\\AppData\\Local\\Temp\\cibw-run-7yufedi9\\cp312-win_amd64\\repaired_wheel', 'C:\\Users\\circleci\\AppData\\Local\\Temp\\cibw-run-7yufedi9\\cp312-win_amd64\\built_wheel\\dwave_optimization-0.6.11-cp312-abi3-win_amd64.whl']
