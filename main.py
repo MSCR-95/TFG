@@ -40,7 +40,8 @@ def main():
     ##############################################################################
     # Vamos a crear directamente los problemas Max-2-SAT 
     generador = Generador(2)  # 2 literales por cláusula → Max-2-SAT
-    generador.cambiar_nVariables(5)
+    n_variables = 30
+    generador.cambiar_nVariables(n_variables)
     for n_clausulas in [5, 10, 15, 20, 22, 24, 26, 28, 30]:
         generador.cambiar_nClausulas(n_clausulas)
         generador.generar_ficheros(10, carpeta_2sat) # genera directamente en carpeta_2sat
@@ -49,7 +50,8 @@ def main():
     # 3. Ejecutar algoritmos sobre los ficheros Max-2-SAT
     # ------------------------------------------------------------------
     # algorithms = build_algorithms(["fuerza_bruta", "fuerza_bruta_optimizado"])
-    algorithms = build_algorithms(["fuerza_bruta"])  
+   
+    algorithms = build_algorithms(["fuerza_bruta_optimizado"])  
     n_jobs = 5
     runner = Runner(algorithms, n_jobs=n_jobs, backend='threading', verbose=True)
     results = runner.run_directory(carpeta_2sat, pattern="*.txt")
@@ -58,7 +60,7 @@ def main():
     # 4. Analizar y guardar resultados
     # ------------------------------------------------------------------
     analizador = Analizador(n_jobs=n_jobs)
-    sink = MultiSink(JSONLResultSink(Path("resultados.jsonl")), analizador)
+    sink = MultiSink(JSONLResultSink(Path(f"resultados_{n_variables}.jsonl")), analizador)
     sink.write_all(results)
     analizador.imprimir_resumen()
     print("Resultados guardados en resultados.jsonl")
