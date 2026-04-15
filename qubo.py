@@ -1,6 +1,20 @@
 import dimod
 from dimod.serialization.format import Formatter
-# Leer el fichero de cláusulas en formato DIMACS CNF
+from pathlib import Path
+from Generador import Generador
+
+# ── Configuración del experimento ────────────────────────────────────────────
+CARPETA_TEST  = Path("test")
+N_PROBLEMAS   = 10       # ficheros a generar
+N_VARIABLES   = 50       # variables por problema
+N_CLAUSULAS   = 50       # cláusulas por problema
+N_RUNS        = 20       # ejecuciones por problema
+N_READS       = 100      # muestras por ejecución
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lectura de ficheros DIMACS CNF
+# ─────────────────────────────────────────────────────────────────────────────
 def leer_clausulas(path: str) -> tuple[int, list[tuple[int, int]]]:
     clausulas = []
     n_variables = 0
@@ -18,13 +32,11 @@ def leer_clausulas(path: str) -> tuple[int, list[tuple[int, int]]]:
                 clausulas.append((literales[0], literales[1]))
     return n_variables, clausulas
 
-# Construir la matriz Q a partir de las cláusulas
-#    Usando las penalizaciones:
-#       Sin negaciones (xi ∨ xj):   1 - xi - xj + xi*xj
-#       Una negación  (¬xi ∨ xj):   xj - xi*xj
-#       Dos negaciones (¬xi ∨ ¬xj): xi*xj
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Construcción de la matriz QUBO
+# ─────────────────────────────────────────────────────────────────────────────
 def construir_qubo(n_variables: int, clausulas: list[tuple[int, int]]) -> tuple[dict, int]:
-    # Q como diccionario {(i,j): coef} con variables indexadas desde 0
     Q = {}
     constante = 0
 
@@ -38,100 +50,125 @@ def construir_qubo(n_variables: int, clausulas: list[tuple[int, int]]) -> tuple[
     for lit1, lit2 in clausulas:
         neg1 = lit1 < 0
         neg2 = lit2 < 0
-        # Variables indexadas desde 0
         i = abs(lit1) - 1
         j = abs(lit2) - 1
 
-        if not neg1 and not neg2:
-            # xi ∨ xj  →  1 - xi - xj + xi*xj
+        if not neg1 and not neg2:       # xi ∨ xj  →  1 - xi - xj + xi*xj
             constante += 1
             add(i, i, -1)
             add(j, j, -1)
             add(i, j, +1)
-
-        elif neg1 and not neg2:
-            # ¬xi ∨ xj  →  xj - xi*xj
+        elif neg1 and not neg2:         # ¬xi ∨ xj  →  xi - xi*xj   (penaliza xi=1,xj=0)
             add(i, i, +1)
             add(i, j, -1)
-
-        elif not neg1 and neg2:
-            # xi ∨ ¬xj  →  xi - xi*xj
+        elif not neg1 and neg2:         # xi ∨ ¬xj  →  xj - xi*xj   (penaliza xi=0,xj=1)
             add(j, j, +1)
             add(i, j, -1)
-
-        else:
-            # ¬xi ∨ ¬xj  →  xi*xj
+        else:                           # ¬xi ∨ ¬xj  →  xi*xj
             add(i, j, +1)
 
     return Q, constante
 
-# Resolver con el simulador de recocido simulado (neal)
-def resolver(Q: dict, constante: int, n_reads: int = 20): # Devuelve la muestra, energía QUBO y constante
-    # bqm = dimod.BinaryQuadraticModel.from_qubo(Q) # Convertir a formato BQM
-    # sampler = neal.SimulatedAnnealingSampler() # Crear el sampler de recocido simulado
-    # resultado = sampler.sample(bqm, num_reads=n_reads) # Ejecutar la muestra
-    # mejor = resultado.first # Obtener la mejor muestra (la de menor energía)
-    sampler = dimod.SimulatedAnnealingSampler().sample_qubo(Q, num_reads=n_reads)
-    mejor = sampler.first
-    # print(f"\nmuestra (usando sample_qubo): {mejor}")
-    # Formatter().fprint(sampler)
-    
-    return (mejor.sample), mejor.energy, constante # Devolvemos la muestra, la energía QUBO y la constante para el conteo de cláusulas no satisfechas
 
-# Función auxiliar para mostrar la matriz Q de forma legible
-def mostrar_matriz_q(Q: dict, n_variables: int):
-    # Construir matriz densa
-    M = [[0.0] * n_variables for _ in range(n_variables)]
-    for (i, j), v in Q.items():
-        M[i][j] = v
+# ─────────────────────────────────────────────────────────────────────────────
+# Resolución con recocido simulado
+# ─────────────────────────────────────────────────────────────────────────────
+def resolver(Q: dict, n_reads: int = N_READS):
+    """Devuelve el sampleset completo."""
+    return dimod.SimulatedAnnealingSampler().sample_qubo(Q, num_reads=n_reads)
 
-    # Cabecera
-    header = "        " + "".join(f"  x{j+1}   " for j in range(n_variables))
-    print(header)
 
-    # Filas
-    for i in range(n_variables):
-        fila = f"  x{i+1} [ "
-        for j in range(n_variables):
-            val = M[i][j]
-            celda = f"{val:+.1f}"
-            fila += f" {celda:>5} "
-        fila += "]"
-        print(fila)
+# ─────────────────────────────────────────────────────────────────────────────
+# Experimento: ¿coincide el primer sample con la solución encontrada?
+# ─────────────────────────────────────────────────────────────────────────────
+def experimento(ficheros: list[Path]):
+    """
+    Para cada fichero, ejecuta N_RUNS veces y comprueba si el primer sample
+    del sampleset (ss.first) coincide con la mejor solución hallada
+    en el conjunto de todos los runs.
 
-# Main
-if __name__ == "__main__":
-    # PATH = "max2sat_43.txt"
-    PATH = "PROBLEM_020_020_1.txt"
+    Como el sampleset de dimod se devuelve ya ordenado por energía,
+    ss.first ES SIEMPRE el mejor sample de ese run. Lo que comprobamos es:
+    ¿esa energía coincide con el óptimo global encontrado entre todos los runs?
+    """
+    print(f"\n{'Problema':<40} {'Runs':>5} {'Con óptimo':>12} {'% óptimo':>10} {'E_óptimo':>10}")
+    print("─" * 82)
 
-    n_vars, clausulas = leer_clausulas(PATH)
-    print(f"Variables: {n_vars} | Cláusulas: {len(clausulas)}")
+    resumen_global = {"total_runs": 0, "runs_optimo": 0}
 
-    Q, constante = construir_qubo(n_vars, clausulas)
-    print(f"\nMatriz Q (términos no nulos):")
-    # for (i, j), v in sorted(Q.items()):
-    #     print(f"  Q[x{i+1}, x{j+1}] = {v}")
-    mostrar_matriz_q(Q, n_vars)
+    for path in ficheros:
+        n_vars, clausulas = leer_clausulas(path)
+        Q, constante = construir_qubo(n_vars, clausulas)
 
-    muestra, energia_qubo, constante = resolver(Q, constante)
+        # ── Fase 1: recoger todos los runs ───────────────────────────────────
+        samplesets = [resolver(Q) for _ in range(N_RUNS)]
 
-    clausulas_no_satisfechas = energia_qubo + constante
-    clausulas_satisfechas = len(clausulas) - clausulas_no_satisfechas # min y 
+        # Mejor energía encontrada entre todos los runs
+        energia_optima = min(ss.first.energy for ss in samplesets)
+
+        # ── Fase 2: contar cuántos runs dieron el óptimo ─────────────────────
+        runs_con_optimo = sum(
+            1 for ss in samplesets if ss.first.energy == energia_optima
+        )
+        pct = 100 * runs_con_optimo / N_RUNS
+
+        print(f"{path.name:<40} {N_RUNS:>5} {runs_con_optimo:>12} {pct:>9.1f}% "
+              f"{energia_optima:>10.1f}")
+
+        resumen_global["total_runs"]  += N_RUNS
+        resumen_global["runs_optimo"] += runs_con_optimo
+
+    # ── Resumen final ─────────────────────────────────────────────────────────
+    total  = resumen_global["total_runs"]
+    optimo = resumen_global["runs_optimo"]
+    print("─" * 82)
+    print(f"{'TOTAL':<40} {total:>5} {optimo:>12} {100*optimo/total:>9.1f}%")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Utilidades de visualización (uso puntual, no en el experimento)
+# ─────────────────────────────────────────────────────────────────────────────
+def mostrar_resultado(ss, clausulas, constante):
+    mejor = ss.first
+    muestra = mejor.sample
+    energia_qubo = mejor.energy
+
+    clausulas_no_sat = energia_qubo + constante
+    clausulas_sat    = len(clausulas) - clausulas_no_sat
 
     print(f"\nSolución encontrada:")
     for var, val in sorted(muestra.items()):
         print(f"  x{var+1} = {val}")
-    print(f"\nEnergía QUBO:            {energia_qubo}")
-    print(f"Constante aditiva:       {constante}")
-    print(f"Cláusulas no satisfechas: {int(clausulas_no_satisfechas)}")
-    print(f"Cláusulas satisfechas:    {int(clausulas_satisfechas)} / {len(clausulas)}")
+    print(f"\nEnergía QUBO:             {energia_qubo}")
+    print(f"Constante aditiva:        {constante}")
+    print(f"Cláusulas no satisfechas: {int(clausulas_no_sat)}")
+    print(f"Cláusulas satisfechas:    {int(clausulas_sat)} / {len(clausulas)}")
 
-    # Verificación manual
     print(f"\nVerificación por cláusula:")
     for lit1, lit2 in clausulas:
-        v1 = muestra[abs(lit1) - 1]
-        v2 = muestra[abs(lit2) - 1]
+        v1   = muestra[abs(lit1) - 1]
+        v2   = muestra[abs(lit2) - 1]
         val1 = (1 - v1) if lit1 < 0 else v1
         val2 = (1 - v2) if lit2 < 0 else v2
-        sat = "S" if (val1 or val2) else "N"
+        sat  = "S" if (val1 or val2) else "N"
         print(f"  ({'+' if lit1>0 else '-'}x{abs(lit1)} ∨ {'+' if lit2>0 else '-'}x{abs(lit2)}) → {sat}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+
+    # ── 1. Generar problemas en carpeta test/ ─────────────────────────────────
+    gen = Generador(nSat=2)
+    gen.cambiar_nVariables(N_VARIABLES)
+    gen.cambiar_nClausulas(N_CLAUSULAS)
+    gen.generar_ficheros(N_PROBLEMAS, carpeta=CARPETA_TEST)
+
+    ficheros = sorted(CARPETA_TEST.glob("PROBLEM_*.txt"))
+    print(f"Generados {len(ficheros)} problemas en '{CARPETA_TEST}/'")
+    print(f"Configuración: {N_VARIABLES} variables, {N_CLAUSULAS} cláusulas, "
+          f"{N_RUNS} runs × {N_READS} lecturas\n")
+
+    # ── 2. Ejecutar el experimento ────────────────────────────────────────────
+    experimento(ficheros)
