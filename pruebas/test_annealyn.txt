@@ -1,0 +1,237 @@
+Problema generado: 40 vars  40 cláusulas  k=2  seed=42
+Fichero: /tmp/tmp43dozrba/test_1.cnf
+
+c test_1  vars=40  clausulas=40  k=2
+p cnf 40 40
+10 4 0
+21 37 0
+-19 9 0
+38 -34 0
+16 -1 0
+35 21 0
+-11 -28 0
+-23 27 0
+16 36 0
+15 -36 0
+14 18 0
+-6 -32 0
+-3 -17 0
+19 -10 0
+31 -6 0
+-9 -33 0
+-22 -8 0
+12 -32 0
+-15 14 0
+39 -9 0
+24 36 0
+-36 26 0
+18 5 0
+38 26 0
+-33 -28 0
+28 38 0
+-37 10 0
+-27 -21 0
+40 -11 0
+24 25 0
+-4 -21 0
+7 -30 0
+20 -8 0
+-3 15 0
+26 32 0
+29 17 0
+-13 -40 0
+-14 -5 0
+16 -2 0
+31 4 0
+
+======================================================================
+EJECUCIÓN 1/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 2/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 3/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 4/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 5/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 6/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 7/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 8/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 9/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+EJECUCIÓN 10/10
+======================================================================
+  Pos  1 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  2 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  3 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  4 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  5 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  6 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  7 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  8 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos  9 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+  Pos 10 | energía:   -13.00 | ocurr:   1 | QUBO:  40/40 | manual:  40/40 | ✓
+
+======================================================================
+MEJOR SOLUCIÓN ENCONTRADA
+======================================================================
+  Ejecución:             1/10
+  Energía QUBO:          -13.00
+  Cláusulas satisfechas: 40/40
+  Ratio:                 100.00%
+  Óptima:                Sí
+
+  Asignación de variables:
+    x1 = 1
+    x2 = 0
+    x3 = 0
+    x4 = 0
+    x5 = 0
+    x6 = 1
+    x7 = 0
+    x8 = 1
+    x9 = 1
+    x10 = 1
+    x11 = 0
+    x12 = 0
+    x13 = 0
+    x14 = 1
+    x15 = 0
+    x16 = 1
+    x17 = 1
+    x18 = 1
+    x19 = 1
+    x20 = 1
+    x21 = 0
+    x22 = 0
+    x23 = 0
+    x24 = 1
+    x25 = 1
+    x26 = 1
+    x27 = 1
+    x28 = 0
+    x29 = 0
+    x30 = 0
+    x31 = 1
+    x32 = 0
+    x33 = 0
+    x34 = 0
+    x35 = 1
+    x36 = 0
+    x37 = 1
+    x38 = 1
+    x39 = 1
+    x40 = 1
+

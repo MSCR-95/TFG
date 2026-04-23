@@ -19,11 +19,11 @@ from pathlib import Path
 from typing import Any
 
 import dimod
+from dimod.serialization.format import Formatter
+import neal
 
 from framework.core import Algorithm
 from framework.registry import register_algorithm
-from algorithms.max2sat.brute import _parse_dimacs  # reutilizamos el parser robusto
-
 
 # ============================================================================
 # Funciones puras (sin estado)
@@ -119,11 +119,94 @@ def _resolver_qubo(
         constante:  La misma constante recibida (para calcular cláusulas fuera).
     """
     bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
-    sampler = dimod.SimulatedAnnealingSampler()
-    resultado = sampler.sample(bqm, num_reads=num_reads)
-    mejor = resultado.first
-    return mejor.sample, mejor.energy, constante
+    sampler = neal.SimulatedAnnealingSampler()
+    resultados = sampler.sample(bqm, num_reads=num_reads)
+    mejor = resultados.first
+    # print(f"\n*********\n")
+    # Formatter().fprint(sampler)
+    return mejor.sample, mejor.energy, constante  # type: ignore
 
+# ============================================================================
+# Parser DIMACS CNF
+# ============================================================================
+
+
+def _parse_dimacs(text: str) -> tuple[int, list[list[int]]]:
+    """
+    Parsea un fichero DIMACS CNF.
+
+    - Líneas que empiezan por 'c' son comentarios.
+    - La línea 'p cnf N M' define variables y cláusulas.
+    - Cada cláusula es una secuencia de literales terminada en 0.
+    - Las cláusulas pueden distribuirse en varias líneas.
+    - Una cláusula vacía (0 sin literales previos) se acepta como
+      cláusula insatisfacible.
+
+    Raises:
+        ValueError: Si el fichero no tiene cabecera válida, si hay múltiples
+            cabeceras, si aparecen literales fuera de rango, si una cláusula
+            queda sin cerrar, o si el número de cláusulas leídas no coincide
+            con el declarado en la cabecera.
+    """
+    cabecera_leida = False
+    num_vars = 0
+    num_clausulas_esperadas: int | None = None
+    clausulas: list[list[int]] = []
+    clausula_actual: list[int] = []
+
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        parts = line.split()
+        head = parts[0]
+
+        if head == "c":
+            continue
+
+        if head == "p":
+            if cabecera_leida:
+                raise ValueError("Se encontraron múltiples cabeceras DIMACS")
+            if len(parts) != 4 or parts[1] != "cnf":
+                raise ValueError("Cabecera DIMACS inválida")
+
+            num_vars = int(parts[2])
+            num_clausulas_esperadas = int(parts[3])
+            cabecera_leida = True
+            continue
+
+        if not cabecera_leida:
+            raise ValueError("Se encontraron literales antes de la cabecera 'p cnf'")
+
+        for token in parts:
+            num = int(token)
+            if num == 0:
+                clausulas.append(clausula_actual)
+                clausula_actual = []
+            else:
+                if abs(num) > num_vars:
+                    raise ValueError(
+                        f"Literal fuera de rango: {num} con num_vars={num_vars}"
+                    )
+                clausula_actual.append(num)
+
+    if clausula_actual:
+        raise ValueError("Última cláusula no terminada en 0")
+
+    if not cabecera_leida:
+        raise ValueError("No se encontró una cabecera 'p cnf' válida")
+
+    if (
+        num_clausulas_esperadas is not None
+        and len(clausulas) != num_clausulas_esperadas
+    ):
+        raise ValueError(
+            f"Número de cláusulas incorrecto: "
+            f"esperadas {num_clausulas_esperadas}, leídas {len(clausulas)}"
+        )
+
+    return num_vars, clausulas
 
 # ============================================================================
 # Algoritmo registrado en el framework
@@ -148,7 +231,7 @@ class MaxSATQUBOSAAlgorithm(Algorithm):
 
     def run(self, file_path: Path) -> dict[str, Any]:
         text = file_path.read_text(encoding="utf-8")
-        num_vars, clausulas_raw = _parse_dimacs(text)
+        num_vars, clausulas_raw = _parse_dimacs(text) 
 
         if not clausulas_raw:
             raise ValueError(
@@ -161,9 +244,9 @@ class MaxSATQUBOSAAlgorithm(Algorithm):
 
         Q, constante = _construir_qubo(num_vars, clausulas)
         muestra, energia_qubo, constante = _resolver_qubo(Q, constante, self.num_reads)
-
-        clausulas_no_sat = int(round(energia_qubo + constante))
-        clausulas_sat = num_clausulas - clausulas_no_sat
+        
+        clausulas_no_sat = int(energia_qubo + constante)
+        clausulas_sat    = num_clausulas - clausulas_no_sat
 
         return {
             "num_vars": num_vars,
