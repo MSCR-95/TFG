@@ -11,13 +11,13 @@ Configuración del problema al principio del script.
 
 from __future__ import annotations
 
+import json
+
 import random
 import sys
 import io
 import tempfile
 from pathlib import Path
-
-from dimod.serialization.format import Formatter
 
 import dimod
 import neal
@@ -25,13 +25,13 @@ import neal
 from algorithms.max2sat.generator import generar_instancias
 
 # ============================================================================
-# CONFIGURACIÓN — edita estos valores
+# CONFIGURACIÓN 
 # ============================================================================
 
-N_VARIABLES  = 100    # número de variables del problema
-N_CLAUSULAS  = 100    # número de cláusulas
-K            = 2      # literales por cláusula (debe ser 2 para Max-2-SAT)
-SEED         = random.randint(1, 1000)  # semilla para reproducibilidad (None = aleatorio)
+N_VARIABLES  = 50    # número de variables del problema
+N_CLAUSULAS  = 130    # número de cláusulas
+K            = 2     # literales por cláusula (debe ser 2 para Max-2-SAT)
+SEED         = random.randint(1, 1000)    # semilla para reproducibilidad (None = aleatorio)
 
 OUTPUT_PATH        = Path(f"pruebas/test_annealyn_{N_VARIABLES}_{N_CLAUSULAS}_{SEED}.txt")  # fichero de salida
 
@@ -41,7 +41,7 @@ NUM_READS          = 100  # lecturas del sampler por ejecución
 
 
 # ============================================================================
-# Parser DIMACS CNF (copiado de brute.py para ser autónomo)
+# Parser DIMACS CNF 
 # ============================================================================
 
 def _parse_dimacs(text: str) -> tuple[int, list[list[int]]]:
@@ -202,6 +202,7 @@ def main() -> None:
         mejor_global_muestra  = None
         mejor_global_energia  = None
         mejor_global_ejecucion = None
+        entradasBucle = 0 # solo para pruebas, eliminar después
 
         # Ejecutar N_EJECUCIONES veces
         for ejecucion in range(1, N_EJECUCIONES + 1):
@@ -212,15 +213,14 @@ def main() -> None:
             bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
             sampler = neal.SimulatedAnnealingSampler()
             sampleset = sampler.sample(bqm, num_reads=NUM_READS)
-            # print(f"  ****************************")
-            # Formatter().fprint(sampleset)
-            
+
             # Truncar al top-K y recorrer
             top = list(sampleset.data(
                 fields=["sample", "energy", "num_occurrences"],
                 sorted_by="energy",
             ))[:TOP_K_SAMPLESET]
 
+            # Analizar cada muestra del top-K
             for pos, dato in enumerate(top, start=1):
                 muestra = dato.sample          # type: ignore
                 energia = dato.energy          # type: ignore
@@ -247,11 +247,13 @@ def main() -> None:
                     print(f"         Cláusulas NO satisfechas: {fallidas}")
 
                 # Actualizar mejor global
-                if sat_manual > mejor_global_sat:
-                    mejor_global_sat       = sat_manual
+                if sat_qubo > mejor_global_sat: # tambien se podría comparar con sat_qubo, 
+                    mejor_global_sat       = sat_qubo
                     mejor_global_muestra   = dict(muestra)
                     mejor_global_energia   = energia
                     mejor_global_ejecucion = ejecucion
+                    entradasBucle += 1 # solo para pruebas, eliminar después
+                    
 
             print()
 
@@ -264,10 +266,13 @@ def main() -> None:
         print(f"  Cláusulas satisfechas: {mejor_global_sat}/{N_CLAUSULAS}")
         print(f"  Ratio:                 {mejor_global_sat/N_CLAUSULAS:.2%}")
         print(f"  Óptima:                {'Sí' if mejor_global_sat == N_CLAUSULAS else 'No'}")
-        print()
+        print(f"  Entradas en bucle:     {entradasBucle}") # solo para pruebas, eliminar después
+        asignacion_json = {
+            f"x{idx + 1}": int(mejor_global_muestra[idx]) # type: ignore
+            for idx in sorted(mejor_global_muestra.keys()) # type: ignore
+        }
         print("  Asignación de variables:")
-        for idx in sorted(mejor_global_muestra.keys()): # type: ignore
-            print(f"    x{idx + 1} = {mejor_global_muestra[idx]}") # type: ignore
+        print(f'  {{"asignacion": {json.dumps(asignacion_json)}}}')
         print()
 
 
