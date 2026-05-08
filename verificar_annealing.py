@@ -1,7 +1,7 @@
 """
-Verificación masiva de soluciones annealyn.
+Verificación masiva de soluciones annealing.
 
-Para cada resultado exitoso en output/max2sat/annealyn/, coge la asignación
+Para cada resultado exitoso en output/max2sat/annealing/, coge la asignación
 devuelta por el algoritmo, la evalúa cláusula a cláusula contra el .cnf
 original, y comprueba que el conteo propio coincide con el que reportó el
 algoritmo (clausulas_satisfechas).
@@ -10,12 +10,12 @@ Una discrepancia indica un bug: en la formación QUBO, en la lectura del
 sampleset, o en el conteo interno del algoritmo.
 
 Uso:
-    python verificar_annealyn.py [--data-root DATA] [--output-root OUTPUT]
+    python verificar_annealing.py [--data-root DATA] [--output-root OUTPUT]
                               [--verbose]
 
 Defaults:
     --data-root    data/max2sat
-    --output-root  output/max2sat/annealyn
+    --output-root  output/max2sat/annealing
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ def _load_final_records(jsonl_path: Path) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-root",   default="data/max2sat")
-    parser.add_argument("--output-root", default="output/max2sat/annealyn")
+    parser.add_argument("--output-root", default="output/max2sat/annealing")
     parser.add_argument("--verbose", action="store_true",
                         help="Mostrar cada discrepancia encontrada")
     args = parser.parse_args()
@@ -192,7 +192,7 @@ def main() -> None:
     # ── Informe ───────────────────────────────────────────────────────────────
     print()
     print("=" * 60)
-    print("VERIFICACIÓN MASIVA  —  annealyn")
+    print("VERIFICACIÓN MASIVA  —  annealing")
     print("=" * 60)
     print(f"  Resultados procesados:   {total:>6}")
     print(f"  CNF no localizados:      {errores_cnf:>6}")

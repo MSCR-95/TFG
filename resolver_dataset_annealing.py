@@ -1,24 +1,24 @@
 """
-Resolución del dataset Max-2-SAT completo con maxsat_qubo_sa (annealyn).
+Resolución del dataset Max-2-SAT completo con maxsat_qubo_sa (annealing).
 
 Lee los problemas generados por generar_dataset.py y los resuelve agrupando
 por (N_variables, N_clausulas). Cada grupo produce un fichero JSONL separado:
 
-    output/max2sat/annealyn/
+    output/max2sat/annealing/
         10/
-            maxsat_annealyn_010_010.jsonl   ← 50 resultados
-            maxsat_annealyn_010_020.jsonl
+            maxsat_annealing_010_010.jsonl   ← 50 resultados
+            maxsat_annealing_010_020.jsonl
             ...
-            maxsat_annealyn_010_100.jsonl
+            maxsat_annealing_010_100.jsonl
         20/
-            maxsat_annealyn_020_020.jsonl
+            maxsat_annealing_020_020.jsonl
             ...
         ...
         100/
-            maxsat_annealyn_100_100.jsonl
+            maxsat_annealing_100_100.jsonl
 
 Ejecución:
-    python resolver_dataset_annealyn.py
+    python resolver_dataset_annealing.py
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from framework import JSONLResultSink, RunnerV2
 # ============================================================================
 
 DATA_ROOT    = Path("data/max2sat")
-OUTPUT_ROOT  = Path("output/max2sat/annealyn")
+OUTPUT_ROOT  = Path("output/max2sat/annealing")
 ALGORITHM    = "maxsat_qubo_sa"
 
 N_JOBS       = 4        # workers paralelos
@@ -78,7 +78,7 @@ def main() -> None:
         output_dir = OUTPUT_ROOT / f"{num_vars:03d}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        jsonl_path = output_dir / f"maxsat_annealyn_{num_vars:03d}_{num_clausulas:03d}.jsonl"
+        jsonl_path = output_dir / f"maxsat_annealing_{num_vars:03d}_{num_clausulas:03d}.jsonl"
 
         if not data_dir.exists():
             logging.warning(

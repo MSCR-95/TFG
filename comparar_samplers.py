@@ -1,10 +1,10 @@
 """
-Compara los resultados de annealynAntiguo (neal) vs annealyn (dwave.samplers).
+Compara los resultados de annealingAntiguo (neal) vs annealing (dwave.samplers).
 
 Uso:
     python comparar_samplers.py \
-        --antiguo output/max2sat/annealynAntiguo \
-        --nuevo   output/max2sat/annealyn \
+        --antiguo output/max2sat/annealingAntiguo \
+        --nuevo   output/max2sat/annealing \
         --out     comparacion_samplers.csv
 """
 
@@ -131,8 +131,8 @@ def guardar_csv(filas: list[dict], path: Path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--antiguo", required=True, help="Carpeta annealynAntiguo (neal)")
-    parser.add_argument("--nuevo",   required=True, help="Carpeta annealyn (dwave.samplers)")
+    parser.add_argument("--antiguo", required=True, help="Carpeta annealingAntiguo (neal)")
+    parser.add_argument("--nuevo",   required=True, help="Carpeta annealing (dwave.samplers)")
     parser.add_argument("--out",     default="comparacion_samplers.csv",
                         help="CSV de comparación por problema")
     args = parser.parse_args()

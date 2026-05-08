@@ -1,5 +1,5 @@
 """
-Test standalone de annealyn.
+Test standalone de annealing.
 
 Genera un problema 2-CNF en un directorio temporal, ejecuta el algoritmo
 10 veces y por cada ejecución analiza las 10 primeras posiciones del
@@ -33,7 +33,7 @@ N_CLAUSULAS  = 130    # número de cláusulas
 K            = 2     # literales por cláusula (debe ser 2 para Max-2-SAT)
 SEED         = random.randint(1, 1000)    # semilla para reproducibilidad (None = aleatorio)
 
-OUTPUT_PATH        = Path(f"pruebas/test_annealyn_{N_VARIABLES}_{N_CLAUSULAS}_{SEED}.txt")  # fichero de salida
+OUTPUT_PATH        = Path(f"pruebas/test_annealing_{N_VARIABLES}_{N_CLAUSULAS}_{SEED}.txt")  # fichero de salida
 
 N_EJECUCIONES      = 10   # cuántas veces se ejecuta el algoritmo
 TOP_K_SAMPLESET    = 10   # cuántas posiciones del sampleset se analizan
