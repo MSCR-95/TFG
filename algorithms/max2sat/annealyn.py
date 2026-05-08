@@ -1,5 +1,5 @@
 """
-Max-2-SAT mediante QUBO + Recocido Simulado (dimod).
+Max-2-SAT mediante QUBO + Recocido Simulado.
 
 Formulación QUBO por penalización de cláusulas:
   Sin negaciones  (xi  ∨  xj):   1 - xi - xj + xi·xj
@@ -20,7 +20,7 @@ from typing import Any
 
 import dimod
 from dimod.serialization.format import Formatter
-import neal
+from dwave.samplers import SimulatedAnnealingSampler
 
 from framework.core import Algorithm
 from framework.registry import register_algorithm
@@ -119,7 +119,7 @@ def _resolver_qubo(
         constante:  La misma constante recibida (para calcular cláusulas fuera).
     """
     bqm = dimod.BinaryQuadraticModel.from_qubo(Q)
-    sampler = neal.SimulatedAnnealingSampler()
+    sampler = SimulatedAnnealingSampler()
     resultados = sampler.sample(bqm, num_reads=num_reads)
     mejor = resultados.first
     # print(f"\n*********\n")
