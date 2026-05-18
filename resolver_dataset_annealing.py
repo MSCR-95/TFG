@@ -64,7 +64,7 @@ def main() -> None:
     combinaciones = [
         (v, c)
         for v in variables
-        for c in range(v, CLAUSULAS_MAX + 1, CLAUSULAS_STEP)
+        for c in range(v+5, CLAUSULAS_MAX + 1, CLAUSULAS_STEP)
     ]
 
     logging.info(

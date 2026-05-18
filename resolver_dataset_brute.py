@@ -32,7 +32,7 @@ from framework import JSONLResultSink, RunnerV2
 # CONFIGURACIÓN — edita NUM_VARS antes de cada ejecución
 # ============================================================================
 
-NUM_VARS     = 30       # ← cambia este valor: 10, 20, 30, ..., 100
+NUM_VARS     = 10       # ← cambia este valor: 10, 20, 30, ..., 100
 
 DATA_ROOT    = Path("data/max2sat")
 OUTPUT_ROOT  = Path("output/max2sat/brute")
