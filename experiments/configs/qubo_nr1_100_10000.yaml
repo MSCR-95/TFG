@@ -1,0 +1,31 @@
+generation:
+  n_files: 100
+  vars: "100:10000:100"
+  densities: "1.0:4.0:0.5"
+  k: 2
+  jobs: 4
+  seed_base: 42
+
+engine:
+  algorithms:
+    - maxsat_qubo_sa:num_reads=1,include_assignment=false
+    - maxsat_qubo_sds:num_reads=1,include_assignment=false
+    - maxsat_qubo_rs:num_reads=1,include_assignment=false
+    - maxsat_qubo_ts:num_reads=1,include_assignment=false
+  recursive: true
+  pattern: "*.cnf"
+  n_jobs: 4
+  seed: 42
+  log_level: INFO
+
+study:
+  alpha: 0.05
+  measures:
+    - path: result.satisfaction_ratio
+      label: satisfaction_ratio
+      higher_is_better: true
+      aggregation: mean
+    - path: run_duration_s
+      label: run_duration_s
+      higher_is_better: false
+      aggregation: mean

@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pandas-stubs>=2.2
+          - loguru>=0.7
+          - numpy>=2.0
+          - scipy-stubs>=1.4
+          - types-pyyaml>=6.0
+        args: [--ignore-missing-imports]
+        # Only type-check library code; tests are excluded in pyproject.toml
+        files: ^src/alglab/

@@ -1,5 +1,103 @@
-.venv/
-dwave-env/
-.vscode/
+# ==============================================================================
+# Python Standard
+# ==============================================================================
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==============================================================================
+# Virtual Environments & Package Managers
+# ==============================================================================
+.venv/
+venv/
+ENV/
+env/
 .env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+# uv generates uv.lock which SHOULD be committed, so we don't ignore it.
+
+# ==============================================================================
+# Testing & Quality Tools
+# ==============================================================================
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.nox/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+htmlcov/
+.pdm-python
+.pdm-build/
+
+# ==============================================================================
+# Project Specific Output & Logs
+# ==============================================================================
+# Ignore all content but keep the directory via .gitkeep
+log/*
+!log/.gitkeep
+output/*
+!output/.gitkeep
+tmp/*
+!tmp/.gitkeep
+
+# ==============================================================================
+# Experiment Artifacts
+# ==============================================================================
+# Keep only reusable experiment configuration in git.
+experiments/*
+!experiments/configs/
+!experiments/configs/*.yaml
+
+# ==============================================================================
+# IDEs / Editors / OS
+# ==============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local agent/tool instructions. Keep these machine-specific files out of git.
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.claude/
+.gemini/
+.agents/
+
+# ==============================================================================
+# Notebooks
+# ==============================================================================
+.ipynb_checkpoints

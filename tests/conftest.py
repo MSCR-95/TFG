@@ -1,7 +1,7 @@
 import multiprocessing
 
-# Necesario en Windows (spawn) para que los worker processes arranquen correctamente
+# Required on Windows (spawn mode) so worker processes start correctly
 multiprocessing.freeze_support()
 
-# Activa todos los @register_algorithm antes de que corran los tests
-import algorithms  # noqa: F401, E402
+# Activate max2sat algorithms in the registry
+import alglab.algorithms  # noqa: F401, E402
